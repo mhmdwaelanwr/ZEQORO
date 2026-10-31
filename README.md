@@ -72,3 +72,9 @@ We examined, but **did not copy or integrate**, the source code of these booking
 Reusing source from these projects requires complying with their specific license obligations, and copying branded assets/trademarks is not permitted. This repository's ownership and distribution/license choices should be deliberately established before wider reuse; **no third-party source code has been copied into this v0.2 change**.
 
 See [PRODUCT-ROADMAP.md](PRODUCT-ROADMAP.md) for staged future work.
+
+## v0.3 security and UX
+- Login throttling (8 attempts/15 minutes), public booking (12/hour), cancellation/rescheduling (25/hour). Limiter is *process-local*; replace with Redis before multi-worker production.
+- Strict host timezone offset, folded RFC 5545 calendar invitations, admin status/search filters.
+- Fixed the admin template's malformed title/content blocks.
+- [Editable product design in Figma](https://www.figma.com/design/i9mN6o8dcSrayygjYBMVkf) — visual concept; UI implementation remains incremental.
