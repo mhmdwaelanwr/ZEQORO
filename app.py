@@ -30,6 +30,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, select, text, func
+from sqlalchemy.exc import SQLAlchemyError
+from infra import RedisWindowLimiter, LimiterUnavailable, redis_client_from_url
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -46,6 +48,7 @@ try:
 except ZoneInfoNotFoundError as e:
     raise RuntimeError(f"Invalid HOST_TZ: {TZ_NAME}") from e
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{ROOT / 'data' / 'calendar.db'}")
+REDIS_URL = os.getenv("REDIS_URL", "").strip()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 if APP_ENV == "production":
@@ -55,6 +58,8 @@ if APP_ENV == "production":
         raise RuntimeError("Set a strong ADMIN_PASSWORD for production")
     if not COOKIE_SECURE or not PUBLIC_BASE_URL.startswith("https://"):
         raise RuntimeError("Production requires HTTPS PUBLIC_BASE_URL and COOKIE_SECURE=true")
+    if not DATABASE_URL.startswith("postgresql+psycopg://") or not REDIS_URL:
+        raise RuntimeError("Production requires a PostgreSQL (psycopg) DATABASE_URL and REDIS_URL")
 
 if DATABASE_URL.startswith("sqlite:"):
     path_string = DATABASE_URL.split("sqlite:///", 1)[-1]
@@ -64,6 +69,15 @@ SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
 class Base(DeclarativeBase):
     pass
+
+class SchedulingLock(Base):
+    """A singleton row used as a transaction-level lock on PostgreSQL.
+
+    Locking this row serializes slot checks across ALL event types and days,
+    including cross-midnight buffers. SQLite still uses BEGIN IMMEDIATE.
+    """
+    __tablename__ = "scheduling_lock"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
 class EventType(Base):
     __tablename__ = "event_types"
@@ -131,6 +145,8 @@ class Booking(Base):
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
+        # Safe for concurrent app starts on SQLite and PostgreSQL.
+        db.execute(text("INSERT INTO scheduling_lock (id) VALUES (1) ON CONFLICT (id) DO NOTHING"))
         if not db.scalar(select(EventType.id).limit(1)):
             db.add_all([
                 EventType(slug="quick-call", title="Quick Intro Call", description="A short call to connect and explore an idea.", duration_min=15),
@@ -141,7 +157,7 @@ async def lifespan(_app: FastAPI):
         db.commit()
     yield
 
-app = FastAPI(title="ZEQORO", version="0.6.0", lifespan=lifespan)
+app = FastAPI(title="ZEQORO", version="0.7.0", lifespan=lifespan)
 
 class SlidingWindowLimiter:
     """Single-process throttle. Replace with Redis before multi-worker deployment."""
@@ -165,14 +181,18 @@ class SlidingWindowLimiter:
         with self._lock:
             self._entries.pop((scope, key), None)
 
-limiter = SlidingWindowLimiter()
+limiter = RedisWindowLimiter(redis_client_from_url(REDIS_URL)) if REDIS_URL else SlidingWindowLimiter()
 
 def client_key(request: Request) -> str:
     # Do not trust X-Forwarded-For unless a trusted proxy config is enforced.
     return request.client.host if request.client else "unknown"
 
 def throttle(request: Request, scope: str, *, limit: int, window: int) -> None:
-    if not limiter.check(scope, client_key(request), limit, window):
+    try:
+        allowed = limiter.check(scope, client_key(request), limit, window)
+    except LimiterUnavailable as exc:
+        raise HTTPException(503, "Rate limiting is temporarily unavailable.", headers={"Retry-After": "30"}) from exc
+    if not allowed:
         raise HTTPException(429, "Too many requests. Please try again later.", headers={"Retry-After": str(window)})
 
 app.add_middleware(SessionMiddleware, secret_key=APP_SECRET, same_site="lax", https_only=COOKIE_SECURE, max_age=60*60*24*3)
@@ -272,9 +292,12 @@ def parse_selected_start(value: str) -> tuple[datetime, date]:
         raise ValueError("Please choose a valid appointment time.") from exc
 
 def write_serialize(db: Session) -> None:
-    # SQLite single-writer lock prevents double booking when multiple requests race.
+    # PostgreSQL: transactional row-level lock across concurrent web workers.
+    # SQLite: single-writer lock across concurrent transactions.
     if engine.dialect.name == "sqlite":
         db.execute(text("BEGIN IMMEDIATE"))
+    else:
+        db.execute(select(SchedulingLock).where(SchedulingLock.id == 1).with_for_update())
 
 def google_settings() -> google.Settings | None:
     return google.Settings.from_env(PUBLIC_BASE_URL)
@@ -406,6 +429,17 @@ def booking_email(to_email: str, guest_name: str, event_title: str, start: datet
     except Exception as exc:
         # Email transport must not undo an already committed booking.
         print(f"SMTP delivery failed: {type(exc).__name__}")
+
+@app.get("/ready")
+def ready():
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        if REDIS_URL:
+            redis_client_from_url(REDIS_URL).ping()
+    except Exception as exc:
+        raise HTTPException(503, "Dependencies are not ready") from exc
+    return {"ready": True}
 
 @app.get("/health")
 def health():
@@ -612,7 +646,11 @@ def login_page(request: Request):
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
     throttle(request, "admin_login", limit=8, window=900)
     if hmac.compare_digest(username, ADMIN_USER) and hmac.compare_digest(password, ADMIN_PASSWORD):
-        limiter.clear("admin_login", client_key(request))
+        try:
+            limiter.clear("admin_login", client_key(request))
+        except LimiterUnavailable:
+            # Successful authentication is valid even if Redis fails during cleanup.
+            pass
         request.session.clear()
         request.session["admin"] = True
         request.session["csrf"] = secrets.token_urlsafe(32)

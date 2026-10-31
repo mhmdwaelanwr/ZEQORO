@@ -3,7 +3,7 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py ./
+COPY app.py google_integration.py infra.py worker.py ./
 COPY templates ./templates
 COPY static ./static
 RUN mkdir -p /app/data && useradd -m -u 10001 appuser && chown -R appuser:appuser /app/data

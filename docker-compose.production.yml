@@ -1,0 +1,69 @@
+# ZEQORO production-oriented single-server stack. PostgreSQL is NOT an automatic
+# migration of existing SQLite data. Follow DEPLOYMENT.md before switching.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zeqoro
+      POSTGRES_USER: zeqoro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zeqoro -d zeqoro"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+  calendar:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set PostgreSQL DATABASE_URL in .env}
+      REDIS_URL: redis://redis:6379/0
+      COOKIE_SECURE: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+    networks: [internal]
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "worker.py"]
+    env_file: .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set PostgreSQL DATABASE_URL in .env}
+      REDIS_URL: redis://redis:6379/0
+      COOKIE_SECURE: "true"
+    depends_on:
+      calendar: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [internal]
+networks:
+  internal: {}
+volumes:
+  postgres_data: {}
+  redis_data: {}
