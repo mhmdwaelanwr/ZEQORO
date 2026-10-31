@@ -34,3 +34,10 @@
 .muted-tip{color:var(--muted);font-size:13px}
 @media(max-width:600px){.settings-fields{grid-template-columns:1fr}.admin-tool-row{align-items:flex-start}.dashboard-tabs{gap:18px}.blocked-row{align-items:flex-start;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* ZEQORO v0.3: accessible booking filters */
+.booking-filter-bar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:20px 0}
+.booking-filter-bar .text-input{max-width:310px;min-width:180px;flex:1 1 200px}
+.booking-filter-bar .secondary-btn{min-height:44px}
+:where(a,button,input,select,textarea,summary):focus-visible{outline:3px solid #a5fcdb;outline-offset:3px}
+@media(max-width:640px){.booking-filter-bar{align-items:stretch;flex-direction:column}.booking-filter-bar .text-input{max-width:none;flex:auto;width:100%}}
