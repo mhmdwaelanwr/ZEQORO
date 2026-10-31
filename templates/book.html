@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ event.title }} · {{ host }}{% endblock %}
+{% block content %}
+<div class="back-row"><a href="/">← All meeting types</a></div>
+<div class="booking-shell">
+  <div class="booking-intro">
+    <span class="eyebrow">BOOK A MEETING</span><div class="mini-avatar">{{ host[0]|upper }}</div>
+    <p class="host-label">{{ host }}</p><h1>{{ event.title }}</h1><p class="subtle">{{ event.description }}</p>
+    <div class="booking-detail"><span>◷</span>{{ event.duration_min }} minutes</div>
+    <div class="booking-detail"><span>◎</span> Online meeting</div>
+    <div class="booking-detail"><span>◉</span> {{ tz }} (host time zone)</div>
+    <div class="booking-note">Select a day, then an available time. Your booking will be immediately confirmed.</div>
+  </div>
+  <div class="booking-form-pane">
+    <div class="form-heading"><div><span class="eyebrow">STEP 01 / 02</span><h2>Select a date & time</h2></div></div>
+    <label class="field-label" for="day">Meeting date</label>
+    <input class="text-input" type="date" id="day" min="{{ today }}" max="{{ max_date }}" value="{{ default_day }}" required>
+    <p class="timezone-hint">All times shown in {{ tz }}. <span id="timezone-current"></span></p>
+    <div id="slots" class="slot-grid" aria-live="polite"><span class="loading">Loading available times...</span></div>
+    <div class="form-separator"></div>
+    <form action="/book/{{ event.slug }}" method="post" id="booking-form">
+      <div class="form-heading"><div><span class="eyebrow">STEP 02 / 02</span><h2>Your details</h2></div></div>
+      <input type="hidden" id="selected-slot" name="start" required>
+      <div id="selection-note" class="selected-time">Choose a time above to continue.</div>
+      <label class="field-label" for="guest-name">Your name <span>*</span></label>
+      <input class="text-input" id="guest-name" name="guest_name" autocomplete="name" required minlength="2" maxlength="160" placeholder="Your full name">
+      <label class="field-label" for="guest-email">Email address <span>*</span></label>
+      <input class="text-input" id="guest-email" name="guest_email" type="email" autocomplete="email" required placeholder="you@example.com">
+      <label class="field-label" for="notes">Anything I should know? <span class="optional">optional</span></label>
+      <textarea class="text-input textarea" id="notes" name="notes" maxlength="2000" rows="3" placeholder="Tell me a bit about what you'd like to discuss."></textarea>
+      <button class="primary-btn wide" id="confirm-btn" type="submit" disabled>Confirm booking <span>↗</span></button>
+      <p class="fineprint">By booking, you agree to receive an appointment confirmation. No account required.</p>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/booking.js"></script>{% endblock %}

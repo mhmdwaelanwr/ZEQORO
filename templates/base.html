@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1020">
+  <meta name="description" content="Meet with {{ host }}. Book a convenient time directly online.">
+  <title>{% block title %}ZEQORO{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <header class="site-header container">
+    <a class="brand" href="/"><span class="brand-mark">✳</span><span>ZEQORO<span class="brand-muted"> / scheduling</span></span></a>
+    <nav class="nav-links">
+      <a href="/">Booking page</a>
+      {% if request.session.get('admin') %}<a class="nav-chip" href="/admin">Dashboard <span aria-hidden="true">↗</span></a>{% else %}<a class="nav-chip" href="/admin/login">Admin <span aria-hidden="true">↗</span></a>{% endif %}
+    </nav>
+  </header>
+  <main class="container">{% block content %}{% endblock %}</main>
+  <footer class="container footer"><span>© 2026 {{ host }} · Personal Scheduling</span><span>Independent · Self-hosted · {{ tz }}</span></footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Admin sign-in · ZEQORO{% endblock %}
+{% block content %}
+<section class="login-wrap"><div class="login-card"><span class="eyebrow">PRIVATE WORKSPACE</span><div class="login-icon">✳</div><h1>Welcome back.</h1><p>Sign in to manage your schedule, meetings and availability.</p>
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+<form action="/admin/login" method="post"><label class="field-label" for="username">Username</label><input class="text-input" id="username" name="username" autocomplete="username" required><label class="field-label" for="password">Password</label><input class="text-input" id="password" name="password" type="password" autocomplete="current-password" required><button class="primary-btn wide" type="submit">Sign in <span>↗</span></button></form>
+</div></section>
+{% endblock %}

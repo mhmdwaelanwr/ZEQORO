@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Book a meeting with {{ host }}{% endblock %}
+{% block content %}
+<section class="hero split-hero">
+  <div class="hero-content">
+    <span class="eyebrow"><span class="pulse-dot"></span> OPEN FOR CONVERSATIONS</span>
+    <h1>Good things<br>start with <span class="gradient-word">a conversation.</span></h1>
+    <p class="lead">Have an idea, partnership, or project in mind? Find the time that suits you. No back-and-forth emails required.</p>
+    <div class="hero-points"><span>◉ Instant confirmation</span><span>◉ Clearly labeled time zones</span></div>
+    <a class="primary-btn" href="#meetings">Explore meeting types <span>↘</span></a>
+  </div>
+  <aside class="hero-card">
+    <div class="preview-top"><span class="preview-date">NOW BOOKING</span><span class="preview-dots">● ● ●</span></div>
+    <div class="avatar">{{ host[0]|upper }}</div>
+    <h2>{{ host }}</h2><p>Let's connect and make something happen.</p>
+    <div class="preview-line"></div>
+    <div class="preview-metadata"><span>◷</span> Flexible meeting times</div>
+    <div class="preview-metadata"><span>◎</span> Online & remote</div>
+    <div class="preview-metadata"><span>⊕</span> {{ tz }}</div>
+    <div class="preview-footer">YOUR NEXT GREAT MEETING STARTS HERE <span>↗</span></div>
+  </aside>
+</section>
+<section id="meetings" class="meetings-section">
+  <div class="section-heading"><div><span class="eyebrow">CHOOSE YOUR CONVERSATION</span><h2>What would you like to discuss?</h2></div><p>Pick an option below, choose a date and time, and you're all set.</p></div>
+  <div class="event-grid">
+    {% for event in events %}
+    <a class="event-card" href="/book/{{ event.slug }}">
+      <div class="event-card-top"><span class="event-icon">{% if event.duration_min <= 15 %}↗{% elif event.duration_min <= 30 %}✳{% else %}◇{% endif %}</span><span class="event-duration">{{ event.duration_min }} MIN</span></div>
+      <h3>{{ event.title }}</h3><p>{{ event.description or 'Schedule some time with me.' }}</p>
+      <div class="card-bottom"><span>◷ {{ event.duration_min }} minutes</span><span class="round-arrow">↗</span></div>
+    </a>
+    {% else %}<p>No meetings are available right now.</p>{% endfor %}
+  </div>
+</section>
+<section class="bottom-cta"><div><span class="eyebrow">LET'S MAKE IT HAPPEN</span><h2>Your next opportunity is one meeting away.</h2></div><span class="line-art">✳</span></section>
+{% endblock %}

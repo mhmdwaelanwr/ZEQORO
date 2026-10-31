@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Meeting confirmation · {{ host }}{% endblock %}
+{% block content %}
+<section class="state-page"><div class="state-icon">✓</div><span class="eyebrow">BOOKING CONFIRMED</span><h1>It's on the calendar.</h1><p class="lead">You're all set, {{ booking.guest_name }}. We look forward to connecting.</p>
+<div class="state-card"><h3>{{ booking.event_type.title }}</h3><div class="booking-detail"><span>◷</span> {{ booking.start_utc | local_time }} ({{ tz }})</div><div class="booking-detail"><span>◴</span> {{ booking.event_type.duration_min }} minutes</div><div class="booking-detail"><span>✉</span> {{ booking.guest_email }}</div><div class="booking-detail"><span>◎</span> {{ host }}</div></div>
+<div class="state-actions"><a class="primary-btn" href="/ics/{{ booking.cancel_token }}">Add to my calendar <span>↓</span></a><a class="secondary-btn" href="/cancel/{{ booking.cancel_token }}">Manage booking</a></div>
+<p class="fineprint">Save this private page URL to access your booking later.{% if booking.status == 'cancelled' %} This booking has been cancelled.{% endif %}</p></section>
+{% endblock %}
