@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Reschedule {{ event.title }} · ZEQORO{% endblock %}
+{% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block content %}
+<div class="back-row"><a href="/confirmed/{{ booking.cancel_token }}">← Back to your meeting</a></div>
+<div class="booking-shell">
+  <section class="booking-intro">
+    <span class="eyebrow">PRIVATE BOOKING LINK</span>
+    <div class="mini-avatar">{{ host[0]|upper }}</div>
+    <p class="host-label">{{ host }}</p>
+    <h1>Change your meeting time</h1>
+    <p class="subtle">{{ event.title }}</p>
+    <div class="booking-detail"><span>◷</span> {{ ((booking.end_utc - booking.start_utc).total_seconds() / 60)|int }} minutes</div>
+    <div class="booking-detail"><span>◉</span> Current: {{ booking.start_utc | local_time }}</div>
+    <div class="booking-detail"><span>◎</span> {{ tz }} timezone</div>
+    <div class="booking-note">Choose a new available time. Your original booking remains confirmed until you submit the change.</div>
+  </section>
+  <section class="booking-form-pane">
+    <span class="eyebrow">CHANGE DATE & TIME</span>
+    <h2>Choose a new time</h2>
+    <label class="field-label" for="day">Meeting date</label>
+    <input class="text-input" type="date" id="day" data-slots-url="/api/reschedule-slots/{{ booking.cancel_token }}" min="{{ today }}" max="{{ max_date }}" value="{{ default_day }}" required>
+    <p class="timezone-hint">Times shown in {{ tz }}. <span id="timezone-current"></span></p>
+    <div id="slots" class="slot-grid" aria-live="polite"><span class="loading">Loading times...</span></div>
+    <div class="form-separator"></div>
+    <form method="post" action="/reschedule/{{ booking.cancel_token }}" id="booking-form">
+      <input type="hidden" id="selected-slot" name="start" required>
+      <div id="selection-note" class="selected-time" aria-live="polite">Choose a new time above to continue.</div>
+      <button class="primary-btn wide" id="confirm-btn" type="submit" disabled>Confirm new time <span>↗</span></button>
+    </form>
+    <p class="fineprint">You can keep your original appointment by leaving this page.</p>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/booking.js" defer></script>{% endblock %}

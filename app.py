@@ -5,7 +5,9 @@ and availability calculations use the configured IANA host timezone.
 """
 from __future__ import annotations
 
+import csv
 import hmac
+import io
 import os
 import re
 import secrets
@@ -19,10 +21,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from dotenv import load_dotenv
 from email_validator import EmailNotValidError, validate_email
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, select, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, select, text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -79,6 +81,13 @@ class Availability(Base):
     start_min: Mapped[int] = mapped_column(Integer)
     end_min: Mapped[int] = mapped_column(Integer)
 
+class BlockedDate(Base):
+    """Whole-day time off in the host's configured timezone."""
+    __tablename__ = "blocked_dates"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    day: Mapped[str] = mapped_column(String(10), unique=True, index=True)
+    reason: Mapped[str] = mapped_column(String(160), default="Unavailable")
+
 class Booking(Base):
     __tablename__ = "bookings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -107,8 +116,19 @@ async def lifespan(_app: FastAPI):
         db.commit()
     yield
 
-app = FastAPI(title="ZEQORO", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="ZEQORO", version="0.2.0", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=APP_SECRET, same_site="lax", https_only=COOKIE_SECURE, max_age=60*60*24*3)
+@app.middleware("http")
+async def privacy_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    if request.url.path.startswith(("/admin", "/confirmed/", "/cancel/", "/reschedule/", "/ics/")):
+        response.headers["Cache-Control"] = "no-store, private"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "templates")
 
@@ -130,16 +150,21 @@ def utc_naive(dt: datetime) -> datetime:
 def get_event(db: Session, slug: str) -> EventType | None:
     return db.scalar(select(EventType).where(EventType.slug == slug, EventType.is_active.is_(True)))
 
-def available_slots(db: Session, event: EventType, day: date) -> list[dict[str, str]]:
+def available_slots(db: Session, event: EventType, day: date, *, ignore_booking_id: int | None = None) -> list[dict[str, str]]:
     today = datetime.now(timezone.utc)
     if day < today.astimezone(HOST_TZ).date() or day > (today.astimezone(HOST_TZ) + timedelta(days=event.max_advance_days)).date():
+        return []
+    if db.scalar(select(BlockedDate.id).where(BlockedDate.day == day.isoformat())):
         return []
     availability = db.scalar(select(Availability).where(Availability.weekday == day.weekday()))
     if not availability:
         return []
     low = utc_naive(datetime.combine(day - timedelta(days=1), time.min, tzinfo=HOST_TZ))
     high = utc_naive(datetime.combine(day + timedelta(days=2), time.min, tzinfo=HOST_TZ))
-    existing = db.scalars(select(Booking).where(Booking.status == "confirmed", Booking.end_utc >= low, Booking.start_utc <= high)).all()
+    query = select(Booking).where(Booking.status == "confirmed", Booking.end_utc >= low, Booking.start_utc <= high)
+    if ignore_booking_id is not None:
+        query = query.where(Booking.id != ignore_booking_id)
+    existing = db.scalars(query).all()
     result = []
     for minute in range(availability.start_min, availability.end_min - event.duration_min + 1, 15):
         hour, rem = divmod(minute, 60)
@@ -166,6 +191,21 @@ def available_slots(db: Session, event: EventType, day: date) -> list[dict[str, 
         if not collision:
             result.append({"start": start_local.isoformat(), "label": start_local.strftime("%I:%M %p").lstrip("0")})
     return result
+
+def parse_selected_start(value: str) -> tuple[datetime, date]:
+    try:
+        selected = datetime.fromisoformat(value)
+        if selected.tzinfo is None:
+            raise ValueError()
+        selected_day = selected.astimezone(HOST_TZ).date()
+        return selected, selected_day
+    except ValueError as exc:
+        raise ValueError("Please choose a valid appointment time.") from exc
+
+def write_serialize(db: Session) -> None:
+    # SQLite single-writer lock prevents double booking when multiple requests race.
+    if engine.dialect.name == "sqlite":
+        db.execute(text("BEGIN IMMEDIATE"))
 
 def admin_only(request: Request):
     if not request.session.get("admin"):
@@ -246,17 +286,13 @@ def book(slug: str, request: Request, tasks: BackgroundTasks, guest_name: str = 
     except EmailNotValidError:
         return public_error(request, "Please enter a valid email address.")
     try:
-        selected = datetime.fromisoformat(start)
-        if selected.tzinfo is None:
-            raise ValueError()
-        selected_day = selected.astimezone(HOST_TZ).date()
-    except ValueError:
-        return public_error(request, "Please choose a valid appointment time.")
+        selected, selected_day = parse_selected_start(start)
+    except ValueError as exc:
+        return public_error(request, str(exc))
     with SessionLocal() as db:
         # Serialize booking checks+writes for SQLite to prevent two guests
         # taking the same time slot under concurrent requests.
-        if engine.dialect.name == "sqlite":
-            db.execute(text("BEGIN IMMEDIATE"))
+        write_serialize(db)
         event = get_event(db, slug)
         if not event:
             db.rollback()
@@ -293,11 +329,64 @@ def cancel_booking(token: str, request: Request):
         booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
         if not booking:
             return public_error(request, "This booking could not be found.", 404)
+        if booking.status != "confirmed":
+            return RedirectResponse(f"/cancel/{token}", status_code=303)
         if booking.start_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
             return public_error(request, "You cannot cancel a meeting after its start time.")
         booking.status = "cancelled"
         db.commit()
         return RedirectResponse(f"/cancel/{token}", status_code=303)
+
+@app.get("/reschedule/{token}", response_class=HTMLResponse)
+def reschedule_page(token: str, request: Request):
+    with SessionLocal() as db:
+        booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
+        if not booking:
+            return public_error(request, "This booking could not be found.", 404)
+        if booking.status != "confirmed" or booking.start_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
+            return public_error(request, "This meeting can no longer be rescheduled.", 409)
+        event = booking.event_type
+        today = datetime.now(HOST_TZ).date()
+        return page(request, "reschedule.html", booking=booking, event=event, today=today.isoformat(), default_day=booking.start_utc.replace(tzinfo=timezone.utc).astimezone(HOST_TZ).date().isoformat(), max_date=(datetime.now(HOST_TZ) + timedelta(days=event.max_advance_days)).date().isoformat())
+
+@app.get("/api/reschedule-slots/{token}")
+def reschedule_slots(token: str, day: str):
+    try:
+        parsed = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, "Use YYYY-MM-DD")
+    with SessionLocal() as db:
+        booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+        if booking.status != "confirmed" or booking.start_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
+            raise HTTPException(409, "Booking is no longer active")
+        return {"slots": available_slots(db, booking.event_type, parsed, ignore_booking_id=booking.id), "timezone": TZ_NAME}
+
+@app.post("/reschedule/{token}")
+def reschedule_booking(token: str, request: Request, tasks: BackgroundTasks, start: str = Form(...)):
+    try:
+        selected, selected_day = parse_selected_start(start)
+    except ValueError as exc:
+        return public_error(request, str(exc))
+    with SessionLocal() as db:
+        write_serialize(db)
+        booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
+        if not booking:
+            db.rollback()
+            return public_error(request, "This booking could not be found.", 404)
+        if booking.status != "confirmed" or booking.start_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
+            db.rollback()
+            return public_error(request, "This meeting can no longer be rescheduled.", 409)
+        event = booking.event_type
+        if selected.isoformat() not in {slot["start"] for slot in available_slots(db, event, selected_day, ignore_booking_id=booking.id)}:
+            db.rollback()
+            return public_error(request, "This time is unavailable. Choose a different time.", 409)
+        booking.start_utc = utc_naive(selected)
+        booking.end_utc = utc_naive(selected + timedelta(minutes=event.duration_min))
+        db.commit()
+        tasks.add_task(booking_email, booking.guest_email, booking.guest_name, "Updated: " + event.title, booking.start_utc, booking.cancel_token)
+        return RedirectResponse(f"/confirmed/{token}", status_code=303)
 
 @app.get("/ics/{token}")
 def ics(token: str):
@@ -347,8 +436,10 @@ def dashboard(request: Request):
         bookings = db.scalars(select(Booking).order_by(Booking.start_utc.desc()).limit(100)).all()
         schedule = {a.weekday: a for a in db.scalars(select(Availability)).all()}
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        upcoming = sum(b.status == "confirmed" and b.start_utc >= now for b in bookings)
-        return page(request, "admin.html", events=events, bookings=bookings, schedule=schedule, days=DAYS, now=now, upcoming=upcoming, csrf_token=request.session["csrf"])
+        upcoming = db.scalar(select(func.count()).select_from(Booking).where(Booking.status == "confirmed", Booking.start_utc >= now)) or 0
+        cancelled = db.scalar(select(func.count()).select_from(Booking).where(Booking.status == "cancelled")) or 0
+        blocked_dates = db.scalars(select(BlockedDate).order_by(BlockedDate.day)).all()
+        return page(request, "admin.html", events=events, bookings=bookings, schedule=schedule, days=DAYS, now=now, upcoming=upcoming, cancelled=cancelled, blocked_dates=blocked_dates, csrf_token=request.session["csrf"])
 
 @app.post("/admin/events")
 def new_event(request: Request, token: str = Form(...), slug: str = Form(...), title: str = Form(...), description: str = Form(""), duration_min: int = Form(...)):
@@ -379,6 +470,72 @@ def parse_hhmm(value: str) -> int:
         raise ValueError("Invalid time")
     h, m = map(int, value.split(":"))
     return h * 60 + m
+
+@app.post("/admin/events/{event_id}/edit")
+def edit_event(event_id: int, request: Request, token: str = Form(...), title: str = Form(...), description: str = Form(""), duration_min: int = Form(...), buffer_before_min: int = Form(0), buffer_after_min: int = Form(10), min_notice_hours: int = Form(4), max_advance_days: int = Form(60)):
+    csrf(request, token)
+    title, description = title.strip(), description.strip()
+    if not 2 <= len(title) <= 160 or len(description) > 1000 or duration_min not in {15, 30, 45, 60, 90, 120} or not 0 <= buffer_before_min <= 120 or not 0 <= buffer_after_min <= 120 or not 0 <= min_notice_hours <= 336 or not 1 <= max_advance_days <= 365:
+        raise HTTPException(400, "Invalid meeting settings")
+    with SessionLocal() as db:
+        event = db.get(EventType, event_id)
+        if not event:
+            raise HTTPException(404)
+        event.title = title
+        event.description = description
+        event.duration_min = duration_min
+        event.buffer_before_min = buffer_before_min
+        event.buffer_after_min = buffer_after_min
+        event.min_notice_hours = min_notice_hours
+        event.max_advance_days = max_advance_days
+        db.commit()
+    return RedirectResponse("/admin#events", 303)
+
+@app.post("/admin/blocked-dates")
+def add_blocked_date(request: Request, token: str = Form(...), day: str = Form(...), reason: str = Form("Unavailable")):
+    csrf(request, token)
+    try:
+        parsed = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, "Date must be YYYY-MM-DD")
+    if parsed < datetime.now(HOST_TZ).date() or parsed > datetime.now(HOST_TZ).date() + timedelta(days=730):
+        raise HTTPException(400, "Choose a future date within two years")
+    reason = reason.strip() or "Unavailable"
+    if len(reason) > 160:
+        raise HTTPException(400, "Reason is too long")
+    with SessionLocal() as db:
+        if db.scalar(select(BlockedDate.id).where(BlockedDate.day == day)):
+            raise HTTPException(409, "This day is already blocked")
+        db.add(BlockedDate(day=day, reason=reason))
+        db.commit()
+    return RedirectResponse("/admin#blocked-days", 303)
+
+@app.post("/admin/blocked-dates/{block_id}/remove")
+def remove_blocked_date(block_id: int, request: Request, token: str = Form(...)):
+    csrf(request, token)
+    with SessionLocal() as db:
+        block = db.get(BlockedDate, block_id)
+        if not block:
+            raise HTTPException(404)
+        db.delete(block)
+        db.commit()
+    return RedirectResponse("/admin#blocked-days", 303)
+
+@app.get("/admin/bookings.csv")
+def export_bookings(request: Request):
+    admin_only(request)
+    with SessionLocal() as db:
+        bookings = db.scalars(select(Booking).order_by(Booking.start_utc.desc())).all()
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Event", "Guest name", "Guest email", "Start UTC", "End UTC", "Status", "Notes"])
+        for b in bookings:
+            # Prefix potentially spreadsheet-executable text with an apostrophe.
+            def safe(value):
+                v = str(value or "")
+                return "'" + v if v.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else v
+            writer.writerow([b.id, safe(b.event_type.title), safe(b.guest_name), safe(b.guest_email), b.start_utc.isoformat(), b.end_utc.isoformat(), b.status, safe(b.notes)])
+        return Response("\ufeff" + output.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="zeqoro-bookings.csv"'})
 
 @app.post("/admin/availability")
 async def set_availability(request: Request):
