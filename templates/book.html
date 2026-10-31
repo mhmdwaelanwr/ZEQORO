@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}{{ event.title }} · {{ host }} · ZEQORO{% endblock %}
+{% block title %}{{ event.title }} · {{ page_host|default(host) }} · ZEQORO{% endblock %}
 {% block body_class %}zeqoro-booking{% endblock %}
 {% block content %}
 <div class="booking-page" data-design="figma-booking-1-75">
-  <div class="back-row"><a href="/">← All meeting types</a></div>
+  <div class="back-row"><a href="{{ back_url|default('/') }}">← All meeting types</a></div>
   <section class="booking-shell" aria-label="Book {{ event.title }}">
     <aside class="booking-intro">
-      <span class="eyebrow booking-host-tag"><span aria-hidden="true">●</span> HOST PROFILE</span>
-      <span class="booking-avatar" aria-hidden="true">{{ host[0]|upper }}</span>
-      <p class="host-label">{{ host }}</p>
+      <span class="eyebrow booking-host-tag"><span aria-hidden="true">●</span> {{ meeting_label|default('HOST PROFILE') }}</span>
+      <span class="booking-avatar" aria-hidden="true">{{ (page_host|default(host))[0]|upper }}</span>
+      <p class="host-label">{{ page_host|default(host) }}</p>
       <h1>{{ event.title }}</h1>
       <p class="subtle">{{ event.description or 'Choose a convenient time to talk.' }}</p>
       <div class="booking-meta">
@@ -19,17 +19,17 @@
       <p class="booking-note">Your time is valuable. Pick what works best.</p>
     </aside>
     <div class="booking-form-pane">
-      <div class="form-heading"><span class="eyebrow">SCHEDULE WITH {{ host|upper }}</span><h2>Choose a date &amp; time</h2></div>
+      <div class="form-heading"><span class="eyebrow">SCHEDULE WITH {{ (page_host|default(host))|upper }}</span><h2>Choose a date &amp; time</h2></div>
       <div class="date-control-row">
         <div><span class="field-label">Select a day</span><div class="month-label" id="month-label" aria-live="polite">Your available dates</div></div>
         <div class="date-navigation"><button type="button" class="date-nav-button" id="prev-dates" aria-label="Previous dates">←</button><button type="button" class="date-nav-button" id="next-dates" aria-label="Next dates">→</button></div>
       </div>
       <div id="date-tiles" class="date-tiles" aria-label="Choose a day"></div>
       <label class="field-label calendar-fallback-label" for="day">Or choose a date from the calendar</label>
-      <input class="text-input calendar-fallback" type="date" id="day" data-event-slug="{{ event.slug }}" data-slots-url="/api/slots/{{ event.slug }}" min="{{ today }}" max="{{ max_date }}" value="{{ default_day }}" required>
+      <input class="text-input calendar-fallback" type="date" id="day" data-event-slug="{{ event.slug }}" data-slots-url="{{ slots_url|default('/api/slots/' ~ event.slug) }}" min="{{ today }}" max="{{ max_date }}" value="{{ default_day }}" required>
       <div class="available-heading"><h3>Available times</h3><span class="timezone-hint">{{ tz }} · <span id="timezone-current"></span></span></div>
       <div id="slots" class="slot-grid" role="group" aria-label="Available meeting times" aria-live="polite"><span class="loading">Loading available times...</span></div>
-      <form action="/book/{{ event.slug }}" method="post" id="booking-form">
+      <form action="{{ booking_action|default('/book/' ~ event.slug) }}" method="post" id="booking-form">
         <input type="hidden" id="selected-slot" name="start" required>
         <div id="selection-note" class="selected-time" aria-live="polite">Choose a time above to continue.</div>
         <button type="button" class="primary-btn continue-btn" id="continue-btn" disabled>Continue <span aria-hidden="true">→</span></button>

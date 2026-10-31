@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="stylesheet" href="/static/figma.css">
   <link rel="stylesheet" href="/static/unified.css">
+  <link rel="stylesheet" href="/static/team.css">
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -18,14 +19,15 @@
     <a class="brand" href="/" aria-label="ZEQORO homepage"><span class="brand-mark" aria-hidden="true">✳</span><span>ZEQORO</span></a>
     <nav class="nav-links" aria-label="Main navigation">
       <a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>Explore meetings</a>
+      <a href="/o/{{ team_org_slug }}">Team booking</a>
       <a href="/how-it-works" {% if request.url.path == '/how-it-works' %}aria-current="page"{% endif %}>How it works</a>
-      {% if request.session.get('admin') %}<a class="nav-chip" href="/admin">My workspace <span aria-hidden="true">↗</span></a>{% else %}<a class="nav-chip" href="/admin/login">Host sign in <span aria-hidden="true">↗</span></a>{% endif %}
+      {% if request.session.get('team_member') %}<a class="nav-chip" href="/team">Team workspace ↗</a>{% elif request.session.get('admin') %}<a class="nav-chip" href="/team">My workspace <span aria-hidden="true">↗</span></a>{% else %}<a class="nav-chip" href="/admin/login">Host sign in <span aria-hidden="true">↗</span></a>{% endif %}
     </nav>
   </header>
   <main class="container" id="main-content">{% block content %}{% endblock %}</main>
   <footer class="container footer">
     <div class="footer-identity"><span class="footer-symbol" aria-hidden="true">✳</span><div><strong>ZEQORO</strong><small>Scheduling, beautifully simple.</small></div></div>
-    <nav class="footer-links" aria-label="Footer navigation"><a href="/">Meetings</a><a href="/how-it-works">How it works</a><a href="/admin/login">Host workspace</a></nav>
+    <nav class="footer-links" aria-label="Footer navigation"><a href="/">Meetings</a><a href="/how-it-works">How it works</a><a href="/o/{{ team_org_slug }}">Team</a><a href="/team/login">Team sign in</a><a href="/admin/login">Host workspace</a></nav>
     <small>© 2026 ZEQORO · {{ tz }}</small>
   </footer>
   <script src="/static/site.js" defer></script>

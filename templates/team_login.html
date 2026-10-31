@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Team sign in · ZEQORO{% endblock %}
+{% block content %}
+<div class="team-auth-wrap"><div class="team-auth-card"><div class="team-auth-icon" aria-hidden="true">✳</div><span class="eyebrow">ZEQORO WORKSPACE</span><h1>Welcome back to your team</h1><p>Sign in to manage your own booking links, availability and assigned meetings.</p>
+{% if error %}<p class="team-error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/team/login"><label class="field-label" for="team-email">Email address</label><input class="text-input" id="team-email" name="email" type="email" autocomplete="username" required>
+<label class="field-label" for="team-password">Password</label><input class="text-input" id="team-password" name="password" type="password" autocomplete="current-password" required>
+<button class="primary-btn wide" type="submit">Sign in →</button></form><p class="team-auth-hint">Workspace owner? <a href="/admin/login">Use the host admin sign in</a></p></div></div>
+{% endblock %}
