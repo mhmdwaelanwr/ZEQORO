@@ -97,3 +97,14 @@ The **editable Figma frames** were translated into real FastAPI/Jinja pages, pre
 **Visual verification:** Browser navigation to localhost was blocked in the test container. We verified the rendered HTML/CSS using Chromium `set_content` with an offline availability stub: desktop and 390px mobile had no document-level horizontal overflow or JavaScript errors. This **does not** substitute for a real deployed-browser visual review or a pixel-diff against the Figma design.
 
 No calendar provider synchronization, production deployment, third-party logo, or paid SaaS billing is included.
+
+## v0.5 unified website experience
+
+- Unified ZEQORO visual tokens across the landing, booking, private rescheduling, confirmation, cancellation, sign-in and error pages.
+- Added an accurate public `/how-it-works` guide with product scope and honest integration notes.
+- Added a public booking-share panel and copy-link controls to the host dashboard.
+- Rebuilt the private reschedule screen on the same Figma booking layout, while retaining existing form/API contracts.
+- Fixed shared booking JavaScript to support both new booking and private rescheduling (missing step controls no longer crash), and provided availability retry.
+- Shared accessible focus styles, responsive layouts, no new external runtime dependencies.
+
+These are visual/flow improvements only; external Google Calendar integration and a durable multi-tenant production backend are NOT implemented.

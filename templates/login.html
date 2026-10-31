@@ -1,8 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Admin sign-in · ZEQORO{% endblock %}
+{% block title %}Sign in to your ZEQORO workspace{% endblock %}
+{% block body_class %}zeqoro-auth{% endblock %}
 {% block content %}
-<section class="login-wrap"><div class="login-card"><span class="eyebrow">PRIVATE WORKSPACE</span><div class="login-icon">✳</div><h1>Welcome back.</h1><p>Sign in to manage your schedule, meetings and availability.</p>
-{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
-<form action="/admin/login" method="post"><label class="field-label" for="username">Username</label><input class="text-input" id="username" name="username" autocomplete="username" required><label class="field-label" for="password">Password</label><input class="text-input" id="password" name="password" type="password" autocomplete="current-password" required><button class="primary-btn wide" type="submit">Sign in <span>↗</span></button></form>
-</div></section>
+<section class="auth-layout">
+  <div class="auth-story"><span class="eyebrow">PRIVATE HOST WORKSPACE</span><h1>Make space for <span class="gradient-word">great meetings.</span></h1><p>Manage your schedule, customize booking links and stay on top of every conversation—all in one place.</p><div class="auth-story-card"><span class="auth-story-symbol" aria-hidden="true">✳</span><strong>One workspace.<br>Every conversation.</strong><small>Your appointments are yours to manage.</small></div></div>
+  <div class="login-card"><div class="auth-card-heading"><span class="login-icon" aria-hidden="true">✳</span><span class="eyebrow">WELCOME BACK</span><h2>Sign in to ZEQORO</h2><p>Enter your host credentials to continue.</p></div>
+    {% if error %}<div class="alert-error" role="alert">{{ error }}</div>{% endif %}
+    <form action="/admin/login" method="post"><label class="field-label" for="username">Username</label><input class="text-input" id="username" name="username" autocomplete="username" required placeholder="Your username" autofocus><label class="field-label" for="password">Password</label><input class="text-input" id="password" name="password" type="password" autocomplete="current-password" required placeholder="Your password"><button class="primary-btn wide" type="submit">Sign in to workspace <span aria-hidden="true">→</span></button></form>
+    <p class="auth-help">Booking a meeting? <a href="/">Explore public meeting links →</a></p>
+  </div>
+</section>
 {% endblock %}

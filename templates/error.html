@@ -1,3 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Something went wrong · {{ host }}{% endblock %}
-{% block content %}<section class="state-page"><div class="state-icon danger-icon">!</div><span class="eyebrow">BOOKING ISSUE</span><h1>We couldn't do that.</h1><p class="lead">{{ message }}</p><a class="primary-btn" href="/">Return to booking page <span>↗</span></a></section>{% endblock %}
+{% block title %}Something went wrong · ZEQORO{% endblock %}
+{% block body_class %}zeqoro-state{% endblock %}
+{% block content %}
+<section class="state-page"><div class="state-icon danger-icon" aria-hidden="true">!</div><span class="eyebrow">SOMETHING DIDN'T WORK</span><h1>That didn't go as planned.</h1><p class="lead">{{ message }}</p><div class="state-actions"><a class="primary-btn" href="/">Explore meetings <span aria-hidden="true">↗</span></a><a class="secondary-btn" href="/how-it-works">How scheduling works</a></div></section>
+{% endblock %}

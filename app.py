@@ -119,7 +119,7 @@ async def lifespan(_app: FastAPI):
         db.commit()
     yield
 
-app = FastAPI(title="ZEQORO", version="0.3.0", lifespan=lifespan)
+app = FastAPI(title="ZEQORO", version="0.5.0", lifespan=lifespan)
 
 class SlidingWindowLimiter:
     """Single-process throttle. Replace with Redis before multi-worker deployment."""
@@ -289,6 +289,10 @@ def home(request: Request):
     with SessionLocal() as db:
         events = db.scalars(select(EventType).where(EventType.is_active.is_(True)).order_by(EventType.duration_min)).all()
         return page(request, "home.html", events=events)
+
+@app.get("/how-it-works", response_class=HTMLResponse)
+def how_it_works(request: Request):
+    return page(request, "how_it_works.html")
 
 @app.get("/book/{slug}", response_class=HTMLResponse)
 def booking_page(slug: str, request: Request):

@@ -3,24 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0d1020">
-  <meta name="description" content="Meet with {{ host }}. Book a convenient time directly online.">
-  <title>{% block title %}ZEQORO{% endblock %}</title>
+  <meta name="theme-color" content="#0b1020">
+  <meta name="description" content="ZEQORO makes scheduling simple. Choose a meeting, find an available time, and book in seconds.">
+  <title>{% block title %}ZEQORO — Scheduling, beautifully simple{% endblock %}</title>
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="stylesheet" href="/static/figma.css">
+  <link rel="stylesheet" href="/static/unified.css">
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
-  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="ambient ambient-a" aria-hidden="true"></div><div class="ambient ambient-b" aria-hidden="true"></div>
   <header class="site-header container">
-    <a class="brand" href="/"><span class="brand-mark">✳</span><span>ZEQORO<span class="brand-muted"> / scheduling</span></span></a>
-    <nav class="nav-links">
-      <a href="/">Booking page</a>
-      {% if request.session.get('admin') %}<a class="nav-chip" href="/admin">Dashboard <span aria-hidden="true">↗</span></a>{% else %}<a class="nav-chip" href="/admin/login">Admin <span aria-hidden="true">↗</span></a>{% endif %}
+    <a class="brand" href="/" aria-label="ZEQORO homepage"><span class="brand-mark" aria-hidden="true">✳</span><span>ZEQORO</span></a>
+    <nav class="nav-links" aria-label="Main navigation">
+      <a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>Explore meetings</a>
+      <a href="/how-it-works" {% if request.url.path == '/how-it-works' %}aria-current="page"{% endif %}>How it works</a>
+      {% if request.session.get('admin') %}<a class="nav-chip" href="/admin">My workspace <span aria-hidden="true">↗</span></a>{% else %}<a class="nav-chip" href="/admin/login">Host sign in <span aria-hidden="true">↗</span></a>{% endif %}
     </nav>
   </header>
-  <main class="container">{% block content %}{% endblock %}</main>
-  <footer class="container footer"><span>© 2026 {{ host }} · Personal Scheduling</span><span>Independent · Self-hosted · {{ tz }}</span></footer>
+  <main class="container" id="main-content">{% block content %}{% endblock %}</main>
+  <footer class="container footer">
+    <div class="footer-identity"><span class="footer-symbol" aria-hidden="true">✳</span><div><strong>ZEQORO</strong><small>Scheduling, beautifully simple.</small></div></div>
+    <nav class="footer-links" aria-label="Footer navigation"><a href="/">Meetings</a><a href="/how-it-works">How it works</a><a href="/admin/login">Host workspace</a></nav>
+    <small>© 2026 ZEQORO · {{ tz }}</small>
+  </footer>
+  <script src="/static/site.js" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

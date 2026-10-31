@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}How ZEQORO works — Simple, flexible scheduling{% endblock %}
+{% block content %}
+<section class="info-hero" aria-labelledby="how-heading"><span class="eyebrow">THE ZEQORO EXPERIENCE</span><h1 id="how-heading">A simpler way <span class="gradient-word">to connect.</span></h1><p class="lead">Everything you need to book a conversation, without the back-and-forth. Here's exactly what happens.</p><a class="primary-btn" href="/#meetings">Explore available meetings <span aria-hidden="true">↗</span></a></section>
+<section class="how-flow" aria-label="The booking process">
+  <article class="how-step"><div class="how-step-number">01</div><div><span class="eyebrow">CHOOSE</span><h2>Pick the right conversation.</h2><p>Each meeting link describes the purpose and duration. Choose what best matches your needs.</p></div><div class="how-mini-card"><span>✳ &nbsp; Meeting type</span><strong>Choose your conversation</strong><small>15 · 30 · 60 minutes</small></div></article>
+  <article class="how-step"><div class="how-step-number">02</div><div><span class="eyebrow">SCHEDULE</span><h2>Find a time that fits.</h2><p>Browse available days and time slots. You can see the host's timezone and, when different, your device's local time.</p></div><div class="how-mini-card"><span>◷ &nbsp; Availability</span><strong>Only open slots appear</strong><small>No accidental overlaps</small></div></article>
+  <article class="how-step"><div class="how-step-number">03</div><div><span class="eyebrow">CONFIRM</span><h2>You're all set.</h2><p>Enter your name and email, confirm the booking, and save your private confirmation link to manage the meeting later.</p></div><div class="how-mini-card"><span>✓ &nbsp; Confirmed</span><strong>Add it to your calendar</strong><small>Download an .ics invitation</small></div></article>
+</section>
+<section class="faq-section" aria-labelledby="faq-heading"><div class="section-heading"><div><span class="eyebrow">GOOD TO KNOW</span><h2 id="faq-heading">Frequently asked questions.</h2></div></div><div class="faq-list">
+  <details><summary>Do I need a ZEQORO account to book?</summary><p>No. Choose a meeting, select a time and enter your details. The host manages the schedule.</p></details>
+  <details><summary>What if my timezone is different from the host's?</summary><p>Available times are shown in the host's timezone, and the booking interface also displays your local time when your device is in a different timezone.</p></details>
+  <details><summary>Can I reschedule or cancel my booking?</summary><p>Yes. Use the private management link from your confirmation page. Keep that link private, since it gives access to your booking.</p></details>
+  <details><summary>Does ZEQORO automatically sync with Google Calendar?</summary><p>Not yet. You can download a calendar invitation (.ics), but live Google Calendar or Google Meet integration is not available in this beta.</p></details>
+</div></section>
+<section class="bottom-cta"><div><span class="eyebrow">READY WHEN YOU ARE</span><h2>Choose a time that works for you.</h2><a class="primary-btn" href="/#meetings">See meeting options <span aria-hidden="true">↗</span></a></div><span class="line-art" aria-hidden="true">✳</span></section>
+{% endblock %}

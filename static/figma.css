@@ -1,7 +1,7 @@
 /* ZEQORO Design System v0.4 — implemented from editable Figma screens 1:2 and 1:75.
-   Purposefully scoped so confirmation, cancellation and landing screens retain their existing behavior. */
+   Existing Figma Dashboard / Booking layouts; unified site tokens in unified.css. */
 :root{--z-bg:#0b1020;--z-panel:#111a2f;--z-surface:#152039;--z-surface-hover:#203353;--z-stroke:#25314a;--z-accent:#755bff;--z-mint:#a5fcdb;--z-text:#f9faff;--z-muted:#9caac3;--z-radius:18px}
-body.zeqoro-admin,body.zeqoro-booking{--bg:var(--z-bg);--card:var(--z-panel);--stroke:var(--z-stroke);--purple:var(--z-accent);--green:var(--z-mint);--text:var(--z-text);--muted:var(--z-muted);--font:Inter,'DM Sans',system-ui,sans-serif;--heading:Inter,Manrope,system-ui,sans-serif;background:var(--z-bg);color:var(--z-text)}
+body{--bg:var(--z-bg);--card:var(--z-panel);--stroke:var(--z-stroke);--purple:var(--z-accent);--green:var(--z-mint);--text:var(--z-text);--muted:var(--z-muted);--font:Inter,'DM Sans',system-ui,sans-serif;--heading:Inter,Manrope,system-ui,sans-serif;background:var(--z-bg);color:var(--z-text)}
 body.zeqoro-admin .ambient,body.zeqoro-booking .ambient{display:none}
 body.zeqoro-admin .site-header,body.zeqoro-admin .footer{display:none}
 body.zeqoro-admin main.container{width:100%;max-width:none;margin:0;padding:0;position:static}
