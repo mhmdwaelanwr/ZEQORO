@@ -73,8 +73,27 @@ Reusing source from these projects requires complying with their specific licens
 
 See [PRODUCT-ROADMAP.md](PRODUCT-ROADMAP.md) for staged future work.
 
-## v0.3 security and UX
-- Login throttling (8 attempts/15 minutes), public booking (12/hour), cancellation/rescheduling (25/hour). Limiter is *process-local*; replace with Redis before multi-worker production.
-- Strict host timezone offset, folded RFC 5545 calendar invitations, admin status/search filters.
-- Fixed the admin template's malformed title/content blocks.
-- [Editable product design in Figma](https://www.figma.com/design/i9mN6o8dcSrayygjYBMVkf) — visual concept; UI implementation remains incremental.
+
+## v0.3 quality/security notes
+
+- Sliding-window throttling on admin login (8 attempts/15 minutes), public booking (12 submissions/hour), guest cancel and reschedule (25/hour). **In-memory, process-local only**: use Redis-backed shared limits in multi-worker production. Do not rely on this limiter alone as an anti-abuse system.
+- Strict matching of host-timezone UTC offset from the slot API.
+- Calendar invitations now include standard status/method fields and 75-octet UTF-8 line folding.
+- Search and filter the latest bookings by guest/email/notes and status. CSV remains a full export.
+- Fix malformed admin template title block that previously leaked the blocked-days markup into HTML metadata.
+- Design source: Figma file https://www.figma.com/design/i9mN6o8dcSrayygjYBMVkf (editable design; key dashboard and booking screens implemented in v0.4).
+
+
+## v0.4 — Figma-to-web implementation
+
+The **editable Figma frames** were translated into real FastAPI/Jinja pages, preserving booking routes and administration rather than serving mockup screenshots:
+
+- [Dashboard, Figma node 1:2](https://www.figma.com/design/i9mN6o8dcSrayygjYBMVkf?node-id=1-2): a left workspace navigation, four **real-data** KPI cards, next-meetings list, next-seven-day activity chart, full booking table and all existing management forms. No fake sample guest data is shipped.
+- [Booking page, Figma node 1:75](https://www.figma.com/design/i9mN6o8dcSrayygjYBMVkf?node-id=1-75): split host/selection layout; JavaScript-built six-day date tiles with previous/next controls and an accessible date input fallback; live slot retrieval and second-step guest form.
+- Responsive mobile layouts and reduced-motion handling. Theme scoped to the dashboard and booking pages via `static/figma.css`.
+- Real summary statistics count confirmed records and upcoming booking time; the chart aggregates upcoming meetings over the next seven **host-local** days.
+- Test with `pytest -q` and `node --check static/booking.js`. New UI regression tests live in `tests/test_figma_ui.py`.
+
+**Visual verification:** Browser navigation to localhost was blocked in the test container. We verified the rendered HTML/CSS using Chromium `set_content` with an offline availability stub: desktop and 390px mobile had no document-level horizontal overflow or JavaScript errors. This **does not** substitute for a real deployed-browser visual review or a pixel-diff against the Figma design.
+
+No calendar provider synchronization, production deployment, third-party logo, or paid SaaS billing is included.

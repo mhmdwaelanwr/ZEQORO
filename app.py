@@ -122,10 +122,11 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="ZEQORO", version="0.3.0", lifespan=lifespan)
 
 class SlidingWindowLimiter:
-    """Single-process rate limit. Use Redis for multi-worker deployment."""
+    """Single-process throttle. Replace with Redis before multi-worker deployment."""
     def __init__(self):
         self._lock = threading.Lock()
         self._entries = defaultdict(deque)
+
     def check(self, scope: str, key: str, limit: int, window: int) -> bool:
         now = monotonic_time.monotonic()
         identifier = (scope, key)
@@ -137,13 +138,15 @@ class SlidingWindowLimiter:
                 return False
             events.append(now)
             return True
+
     def clear(self, scope: str, key: str) -> None:
         with self._lock:
             self._entries.pop((scope, key), None)
 
 limiter = SlidingWindowLimiter()
+
 def client_key(request: Request) -> str:
-    # Ignore spoofable X-Forwarded-For unless trusted proxy settings are added.
+    # Do not trust X-Forwarded-For unless a trusted proxy config is enforced.
     return request.client.host if request.client else "unknown"
 
 def throttle(request: Request, scope: str, *, limit: int, window: int) -> None:
@@ -231,6 +234,8 @@ def parse_selected_start(value: str) -> tuple[datetime, date]:
         if selected.tzinfo is None:
             raise ValueError()
         host_equivalent = selected.astimezone(HOST_TZ)
+        # A client must submit the exact host-local start supplied by the slots API.
+        # Reject spoofed offsets even when the absolute UTC instant matches.
         if selected.utcoffset() != host_equivalent.utcoffset():
             raise ValueError()
         selected_day = host_equivalent.date()
@@ -444,7 +449,7 @@ def ics(token: str):
             f"DESCRIPTION:{esc('Guest: ' + booking.guest_name)}",
             "END:VEVENT", "END:VCALENDAR", "",
         ])
-        # RFC 5545 requires folding UTF-8 lines at 75 octets.
+        # RFC 5545: UTF-8 content lines must be folded at 75 octets.
         folded = []
         for line in body.split("\r\n"):
             if not line:
@@ -501,8 +506,24 @@ def dashboard(request: Request, status: str = "all", q: str = ""):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         upcoming = db.scalar(select(func.count()).select_from(Booking).where(Booking.status == "confirmed", Booking.start_utc >= now)) or 0
         cancelled = db.scalar(select(func.count()).select_from(Booking).where(Booking.status == "cancelled")) or 0
+        confirmed_total = db.scalar(select(func.count()).select_from(Booking).where(Booking.status == "confirmed")) or 0
+        future_bookings = db.scalars(select(Booking).where(Booking.status == "confirmed", Booking.start_utc >= now).order_by(Booking.start_utc.asc())).all()
+        upcoming_hours = round(sum((b.end_utc - b.start_utc).total_seconds() for b in future_bookings) / 3600, 1)
+        active_links = sum(bool(event.is_active) for event in events)
+        today_local = datetime.now(HOST_TZ).date()
+        booking_counts = [0] * 7
+        for booking in future_bookings:
+            local_day = booking.start_utc.replace(tzinfo=timezone.utc).astimezone(HOST_TZ).date()
+            delta = (local_day - today_local).days
+            if 0 <= delta < 7:
+                booking_counts[delta] += 1
+        scale = max(booking_counts, default=0)
+        chart_days = [{"date": (today_local + timedelta(days=i)).isoformat(), "label": (today_local + timedelta(days=i)).strftime("%a"), "count": n, "height": round(100 * n / scale) if scale else 0} for i, n in enumerate(booking_counts)]
+        # Summary rows respect active guest/status filters, avoiding unexpected name disclosure.
+        selected_ids = {b.id for b in bookings} if q or status != "all" else None
+        next_meetings = [b for b in future_bookings if selected_ids is None or b.id in selected_ids][:4]
         blocked_dates = db.scalars(select(BlockedDate).order_by(BlockedDate.day)).all()
-        return page(request, "admin.html", events=events, bookings=bookings, schedule=schedule, days=DAYS, now=now, upcoming=upcoming, cancelled=cancelled, blocked_dates=blocked_dates, csrf_token=request.session["csrf"], filter_status=status, filter_query=q)
+        return page(request, "admin.html", events=events, bookings=bookings, schedule=schedule, days=DAYS, now=now, upcoming=upcoming, cancelled=cancelled, blocked_dates=blocked_dates, confirmed_total=confirmed_total, upcoming_hours=upcoming_hours, active_links=active_links, next_meetings=next_meetings, chart_days=chart_days, weekly_count=sum(booking_counts), csrf_token=request.session["csrf"], filter_status=status, filter_query=q)
 
 @app.post("/admin/events")
 def new_event(request: Request, token: str = Form(...), slug: str = Form(...), title: str = Form(...), description: str = Form(""), duration_min: int = Form(...)):

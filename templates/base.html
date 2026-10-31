@@ -7,9 +7,10 @@
   <meta name="description" content="Meet with {{ host }}. Book a convenient time directly online.">
   <title>{% block title %}ZEQORO{% endblock %}</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/figma.css">
   {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <header class="site-header container">
     <a class="brand" href="/"><span class="brand-mark">✳</span><span>ZEQORO<span class="brand-muted"> / scheduling</span></span></a>

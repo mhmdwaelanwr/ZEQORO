@@ -1,0 +1,122 @@
+/* ZEQORO Design System v0.4 — implemented from editable Figma screens 1:2 and 1:75.
+   Purposefully scoped so confirmation, cancellation and landing screens retain their existing behavior. */
+:root{--z-bg:#0b1020;--z-panel:#111a2f;--z-surface:#152039;--z-surface-hover:#203353;--z-stroke:#25314a;--z-accent:#755bff;--z-mint:#a5fcdb;--z-text:#f9faff;--z-muted:#9caac3;--z-radius:18px}
+body.zeqoro-admin,body.zeqoro-booking{--bg:var(--z-bg);--card:var(--z-panel);--stroke:var(--z-stroke);--purple:var(--z-accent);--green:var(--z-mint);--text:var(--z-text);--muted:var(--z-muted);--font:Inter,'DM Sans',system-ui,sans-serif;--heading:Inter,Manrope,system-ui,sans-serif;background:var(--z-bg);color:var(--z-text)}
+body.zeqoro-admin .ambient,body.zeqoro-booking .ambient{display:none}
+body.zeqoro-admin .site-header,body.zeqoro-admin .footer{display:none}
+body.zeqoro-admin main.container{width:100%;max-width:none;margin:0;padding:0;position:static}
+/* Dashboard frame */
+.workspace{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:100vh}
+.workspace-sidebar{height:100vh;position:sticky;top:0;background:#0e1729;padding:32px 20px 24px;display:flex;flex-direction:column;align-self:start}
+.workspace-brand{font-size:23px;font-weight:800;letter-spacing:.5px;display:flex;align-items:center;gap:12px;padding-left:8px}
+.workspace-mark{display:grid;place-items:center;width:38px;height:38px;color:var(--z-mint);background:#26355d;border-radius:13px;font-size:24px}
+.workspace-menu-label{font-size:10px;letter-spacing:1.3px;color:var(--z-muted);margin:50px 0 18px 9px;font-weight:800}
+.workspace-navigation{display:grid;gap:12px}
+.workspace-navigation a{display:flex;align-items:center;min-height:46px;gap:17px;border-radius:12px;color:var(--z-muted);font-size:14px;padding:12px 15px;transition:background .15s,color .15s}
+.workspace-navigation a>span{font-size:18px;width:20px;display:inline-grid;place-items:center}
+.workspace-navigation a.is-active,.workspace-navigation a:hover,.workspace-navigation a:focus-visible{color:var(--z-text);background:#203353}
+.workspace-sidebar-footer{display:flex;align-items:center;gap:11px;margin-top:auto;border-top:1px solid var(--z-stroke);padding:20px 5px 0}
+.sidebar-avatar{width:38px;height:38px;background:var(--z-accent);border-radius:12px;display:grid;place-items:center;font-weight:800}
+.workspace-sidebar-footer strong,.workspace-sidebar-footer small{display:block;line-height:1.4}.workspace-sidebar-footer strong{font-size:13px}.workspace-sidebar-footer small{font-size:10px;color:var(--z-muted)}
+.workspace-main{padding:38px clamp(24px,3.1vw,46px) 90px;min-width:0;width:100%}
+body.zeqoro-admin .dashboard-header{padding:0;margin:0 0 47px;align-items:center}
+body.zeqoro-admin .dashboard-header h1{font:800 31px/1.25 var(--heading);margin:0 0 11px;letter-spacing:-1.1px;color:var(--z-text)}
+body.zeqoro-admin .dashboard-header p{color:var(--z-muted);font-size:14px;line-height:1.5}
+body.zeqoro-admin .new-event-cta{background:var(--z-accent);color:#fff;box-shadow:none;font-size:13px;min-height:44px;padding:12px 19px;white-space:nowrap}
+body.zeqoro-admin .new-event-cta:hover{background:#886fff}
+body.zeqoro-admin .stats-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
+body.zeqoro-admin .stat-card{background:var(--z-panel);border:1px solid var(--z-stroke);border-radius:16px;min-height:130px;padding:20px;box-shadow:none;display:flex;flex-direction:column}
+body.zeqoro-admin .stat-card>span{color:var(--z-muted);font-size:13px}
+body.zeqoro-admin .stat-card strong{color:var(--z-text);font:800 30px/1.25 var(--heading);margin:8px 0}
+body.zeqoro-admin .stat-card p{color:var(--z-mint);font-size:11px;line-height:1.4;margin-top:auto}
+.workspace-highlights{display:grid;grid-template-columns:minmax(0,1.92fr) minmax(290px,1fr);gap:22px;margin-top:28px}
+.highlight-panel{background:var(--z-panel);border:1px solid var(--z-stroke);border-radius:18px;padding:24px;min-height:484px;min-width:0}
+.highlight-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:27px}
+.highlight-heading h2{font:800 21px var(--heading);letter-spacing:-.6px;margin:0 0 5px}
+.highlight-heading p{font-size:12px;color:var(--z-muted);margin:0}
+.meeting-list{display:grid;gap:15px}
+.meeting-row{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:12px;align-items:center;background:#16223b;border-radius:12px;padding:16px 19px;min-height:74px}
+.meeting-row:nth-child(even){background:#141f35}
+.meeting-time{font-weight:800;color:var(--z-mint);font-size:13px;white-space:nowrap}
+.meeting-subject{min-width:0}.meeting-subject strong{font-size:14px;display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.meeting-subject small{display:block;color:var(--z-muted);font-size:12px;margin-top:3px}
+body.zeqoro-admin .meeting-row .status{padding:5px 8px;white-space:nowrap}
+.meeting-empty{padding:55px 12px;text-align:center;color:var(--z-text)}.meeting-empty p{color:var(--z-muted);font-size:13px}
+.insights-panel{display:flex;flex-direction:column}.insights-chart{margin:10px 0 26px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:end;flex:1;min-height:235px}
+.chart-column{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:17px;min-width:0}.chart-track{height:225px;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.chart-bar{width:min(29px,80%);min-height:4px;background:#203353;border-radius:6px 6px 3px 3px;transition:height .2s ease}
+.chart-bar-accent{background:var(--z-accent)}.chart-column small{font-size:11px;color:var(--z-muted)}.chart-caption{color:var(--z-mint);font-size:12px;margin:0}
+.workspace-details-header{display:flex;align-items:center;justify-content:space-between;margin-top:50px;border-bottom:1px solid var(--z-stroke);padding-bottom:20px}
+body.zeqoro-admin .admin-section{scroll-margin-top:24px;margin-top:44px}
+body.zeqoro-admin .admin-section .section-heading h2{font-size:25px}
+body.zeqoro-admin .admin-section .eyebrow{color:var(--z-mint)}
+body.zeqoro-admin .table-scroll,body.zeqoro-admin .admin-event,body.zeqoro-admin .admin-form,body.zeqoro-admin .blocked-row{background:var(--z-panel);border-color:var(--z-stroke)}
+body.zeqoro-admin .data-table th{background:#16223b}body.zeqoro-admin .data-table td{border-color:var(--z-stroke)}
+body.zeqoro-admin .admin-event-grid{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+body.zeqoro-admin .admin-event{border-radius:16px}
+body.zeqoro-admin .primary-btn{background:var(--z-accent);color:#fff}
+body.zeqoro-admin .text-input{background:#101b30;border-color:#2f405e}
+body.zeqoro-admin #create-event{scroll-margin-top:24px}
+body.zeqoro-admin .booking-filter-bar .text-input{width:auto}
+/* Booking: 1150px Figma split layout; data and events remain backend-driven. */
+body.zeqoro-booking .site-header{height:113px;border-bottom:0;width:min(1280px,calc(100% - 64px));align-items:center}
+body.zeqoro-booking .site-header .brand{font-size:22px;font-weight:800}
+body.zeqoro-booking .site-header .brand-mark{background:none;color:var(--z-mint);font-size:30px}
+body.zeqoro-booking .site-header .brand-muted{display:none}
+body.zeqoro-booking .site-header .nav-links{display:none}
+body.zeqoro-booking main.container{width:min(1150px,calc(100% - 48px));max-width:none}
+body.zeqoro-booking .back-row{padding:3px 0 14px;color:var(--z-muted)}
+body.zeqoro-booking .booking-shell{display:grid;grid-template-columns:minmax(310px,35.2%) minmax(0,1fr);background:var(--z-panel);border:1px solid var(--z-stroke);border-radius:24px;min-height:660px;box-shadow:0 24px 70px #0002;overflow:hidden}
+body.zeqoro-booking .booking-intro{background:var(--z-surface);border:0;border-right:1px solid var(--z-stroke);padding:43px 40px;display:flex;flex-direction:column}
+body.zeqoro-booking .booking-host-tag{color:var(--z-mint);letter-spacing:1.1px;font-size:11px}
+.booking-host-tag>span{font-size:11px}
+body.zeqoro-booking .booking-avatar{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:#203353;color:var(--z-mint);font-size:26px;font-weight:800;margin:37px 0 8px}
+body.zeqoro-booking .host-label{color:var(--z-muted);font-size:13px;margin:0 0 12px}
+body.zeqoro-booking .booking-intro h1{font:800 clamp(23px,2.1vw,28px)/1.25 var(--heading);letter-spacing:-.9px;margin:0 0 15px}
+body.zeqoro-booking .booking-intro .subtle{color:var(--z-muted);font-size:14px;line-height:1.7;margin:0 0 22px}
+body.zeqoro-booking .booking-meta{display:grid;gap:8px;margin-top:10px}
+body.zeqoro-booking .booking-detail{color:var(--z-text);margin:0;font-size:15px;min-height:32px;gap:9px}
+body.zeqoro-booking .booking-detail>span{font-size:19px;color:var(--z-mint)}
+body.zeqoro-booking .booking-note{margin:auto 0 0;padding:40px 0 5px;border:0;background:transparent;color:var(--z-muted);font-size:13px}
+body.zeqoro-booking .booking-form-pane{padding:43px 39px;min-width:0}
+body.zeqoro-booking .form-heading h2{font:800 25px/1.25 var(--heading);margin:8px 0 21px;letter-spacing:-.6px}
+body.zeqoro-booking .form-heading .eyebrow{color:var(--z-mint);letter-spacing:1px;font-size:10px}
+body.zeqoro-booking .date-control-row{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:19px}
+body.zeqoro-booking .date-control-row .field-label{margin:0 0 5px;color:var(--z-muted);font-size:12px}
+.month-label{color:var(--z-text);font-size:15px;font-weight:700}
+.date-navigation{display:flex;gap:7px}.date-nav-button{width:38px;height:38px;border:1px solid var(--z-stroke);border-radius:10px;background:#182644;color:var(--z-text);font-weight:700}
+.date-nav-button:not(:disabled):hover{background:#26375b}
+.date-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:18px}
+.date-tile{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;height:95px;padding:10px 3px;border-radius:12px;border:1px solid transparent;background:#203353;color:var(--z-text);transition:background .15s,border-color .15s}
+.date-tile span{font-size:12px;color:var(--z-muted)}.date-tile strong{font-size:25px;line-height:1.1}
+.date-tile[aria-pressed="true"],.date-tile:hover:not(:disabled){background:var(--z-accent);color:white;border-color:#9482ff}
+.date-tile[aria-pressed="true"] span{color:#fff}.date-tile:disabled{opacity:.35}
+body.zeqoro-booking .calendar-fallback-label{font-size:12px;color:var(--z-muted);margin:6px 0 6px}
+body.zeqoro-booking .calendar-fallback{min-height:40px;max-width:260px;font-size:13px;background:#17243c;border-color:var(--z-stroke);color:var(--z-text)}
+.available-heading{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:baseline;margin:25px 0 15px}
+.available-heading h3{font-size:16px;font-weight:800;margin:0}
+body.zeqoro-booking .timezone-hint{font-size:11px;margin:0;color:var(--z-muted)}
+body.zeqoro-booking .slot-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;min-height:110px}
+body.zeqoro-booking .slot-btn{min-height:54px;border:1px solid transparent;border-radius:10px;background:#203353;color:var(--z-text);font-size:14px;font-weight:600;padding:7px 12px}
+body.zeqoro-booking .slot-btn:hover,body.zeqoro-booking .slot-btn.chosen{border-color:#9888ff;background:var(--z-accent);color:white}
+body.zeqoro-booking .selected-time{margin-top:19px;padding:11px 13px;color:var(--z-muted);border:1px solid var(--z-stroke);background:#18263e;border-radius:10px;font-size:12px}
+body.zeqoro-booking .primary-btn{background:var(--z-accent);color:white;box-shadow:none;font-size:13px}
+body.zeqoro-booking .continue-btn{display:flex;min-width:153px;margin:23px 0 0 auto;min-height:44px;justify-content:space-between}
+body.zeqoro-booking .guest-details{margin-top:24px}
+body.zeqoro-booking .guest-details[hidden],body.zeqoro-booking .continue-btn[hidden]{display:none!important}
+body.zeqoro-booking .guest-details .form-heading h2{font-size:21px}
+body.zeqoro-booking .field-label{color:var(--z-muted)}
+body.zeqoro-booking .text-input{background:#101b30;border-color:#2f405e;color:var(--z-text)}
+body.zeqoro-booking .footer{border-color:var(--z-stroke)}
+@media(max-width:1200px){body.zeqoro-admin .stats-grid{gap:12px}.workspace-highlights{gap:14px}body.zeqoro-admin .stat-card{padding:16px}.meeting-row{grid-template-columns:88px minmax(0,1fr)}.meeting-row .status{grid-column:2;justify-self:start}}
+@media(max-width:1000px){.workspace{grid-template-columns:205px minmax(0,1fr)}.workspace-sidebar{padding-inline:12px}.workspace-main{padding:30px 24px 60px}body.zeqoro-admin .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-highlights{grid-template-columns:1fr}.highlight-panel{min-height:unset}.insights-chart{height:190px;min-height:190px;flex:initial}.chart-track{height:140px}.insights-panel{min-height:270px}}
+@media(max-width:720px){.workspace{display:block}.workspace-sidebar{height:auto;position:sticky;top:0;z-index:30;padding:10px 14px;border-bottom:1px solid var(--z-stroke)}.workspace-brand{font-size:17px}.workspace-mark{width:30px;height:30px;font-size:19px}.workspace-menu-label,.workspace-sidebar-footer{display:none}.workspace-navigation{display:flex;overflow-x:auto;gap:6px;margin-top:9px;padding-bottom:1px}.workspace-navigation a{white-space:nowrap;font-size:12px;min-height:40px;padding:8px 10px;gap:6px}.workspace-navigation a>span{font-size:13px;width:14px}.workspace-main{padding:25px 16px 50px}body.zeqoro-admin .dashboard-header{gap:16px;margin-bottom:24px}body.zeqoro-admin .dashboard-header h1{font-size:28px}body.zeqoro-admin .dashboard-header p{font-size:12px}body.zeqoro-admin .new-event-cta{font-size:11px;padding:10px 12px;white-space:normal}body.zeqoro-admin .stat-card{min-height:108px}.workspace-details-header{margin-top:35px}body.zeqoro-admin .admin-section{scroll-margin-top:130px}body.zeqoro-booking .site-header{width:min(100% - 30px,1150px);height:80px}body.zeqoro-booking main.container{width:calc(100% - 24px)}body.zeqoro-booking .booking-shell{grid-template-columns:1fr}body.zeqoro-booking .booking-intro{padding:25px 25px 29px;gap:3px;min-height:unset;border-right:0;border-bottom:1px solid var(--z-stroke)}body.zeqoro-booking .booking-avatar{margin:10px 0 5px;width:44px;height:44px;font-size:21px}body.zeqoro-booking .booking-note{padding:10px 0 0;margin:7px 0 0}body.zeqoro-booking .booking-form-pane{padding:28px 23px}body.zeqoro-booking .date-tiles{display:flex;overflow-x:auto;padding-bottom:7px}.date-tile{flex:0 0 85px}body.zeqoro-booking .slot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:420px){body.zeqoro-admin .dashboard-header{flex-direction:column;align-items:stretch}body.zeqoro-admin .new-event-cta{align-self:flex-start}body.zeqoro-admin .stats-grid{gap:9px}body.zeqoro-admin .stat-card{padding:13px}body.zeqoro-admin .stat-card>span{font-size:11px}body.zeqoro-admin .stat-card strong{font-size:26px}.meeting-row{grid-template-columns:75px minmax(0,1fr);padding:12px}.meeting-time{font-size:11px}.highlight-panel{padding:15px}body.zeqoro-booking .booking-form-pane{padding:22px 15px}body.zeqoro-booking .slot-grid{gap:8px}}
+@media(prefers-reduced-motion:reduce){.date-tile,.chart-bar,.workspace-navigation a{transition:none!important}}
+
+.workspace-overline{color:var(--z-mint);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:800;display:block;margin-bottom:6px}
+
+body.zeqoro-booking .slot-btn{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px}
+body.zeqoro-booking .slot-btn strong{font-size:14px;font-weight:700}
+body.zeqoro-booking .slot-btn small{font-size:11px;color:var(--z-muted);font-weight:400}
+body.zeqoro-booking .slot-btn.chosen small{color:#f4f2ff}
+@media(max-width:720px){body.zeqoro-admin .availability-row{grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);gap:7px}body.zeqoro-admin .availability-row .checkbox-label{grid-column:1/-1}body.zeqoro-admin .availability-row .time-input{width:100%;min-width:0;min-height:44px;padding:8px 7px;font-size:12px}body.zeqoro-admin .availability-row .time-sep{justify-self:center}}

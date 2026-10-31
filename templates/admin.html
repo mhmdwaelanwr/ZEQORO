@@ -1,9 +1,56 @@
 {% extends "base.html" %}
 {% block title %}Dashboard · ZEQORO{% endblock %}
+{% block body_class %}zeqoro-admin{% endblock %}
 {% block content %}
-<div class="dashboard-header"><div><span class="eyebrow">YOUR WORKSPACE</span><h1>Calendar overview<span class="gradient-word">.</span></h1><p>A clearer control center for bookings, meeting rules and days off.</p></div><form method="post" action="/admin/logout"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="secondary-btn" type="submit">Sign out ↗</button></form></div>
-<nav class="dashboard-tabs"><a href="#bookings">Bookings</a><a href="#events">Meeting types</a><a href="#availability">Availability</a><a href="#blocked-days">Days off</a><a href="/">Public page ↗</a></nav>
-<div class="stats-grid"><div class="stat-card"><span class="eyebrow">ALL UPCOMING</span><strong>{{ upcoming }}</strong><p>Confirmed future bookings</p></div><div class="stat-card"><span class="eyebrow">EVENT TYPES</span><strong>{{ events|length }}</strong><p>Meeting link configurations</p></div><div class="stat-card"><span class="eyebrow">TIME ZONE</span><strong class="stat-tz">{{ tz }}</strong><p>Host-local availability and bookings</p></div></div>
+<div class="workspace" id="overview" data-design="figma-dashboard-1-2">
+  <aside class="workspace-sidebar" aria-label="Workspace navigation">
+    <a class="workspace-brand" href="/"><span class="workspace-mark" aria-hidden="true">✳</span> ZEQORO</a>
+    <p class="workspace-menu-label">WORKSPACE</p>
+    <nav class="workspace-navigation" aria-label="Dashboard sections">
+      <a class="is-active" href="#overview" aria-current="page"><span aria-hidden="true">▦</span> Overview</a>
+      <a href="#bookings"><span aria-hidden="true">▣</span> Bookings</a>
+      <a href="#events"><span aria-hidden="true">◫</span> Event types</a>
+      <a href="#availability"><span aria-hidden="true">◷</span> Availability</a>
+      <a href="#blocked-days"><span aria-hidden="true">◇</span> Time off</a>
+      <a href="/" target="_blank" rel="noopener"><span aria-hidden="true">↗</span> Public page</a>
+    </nav>
+    <div class="workspace-sidebar-footer"><span class="sidebar-avatar">{{ host[0]|upper }}</span><div><strong>{{ host }}</strong><small>{{ tz }}</small></div></div>
+  </aside>
+  <div class="workspace-main">
+    <header class="dashboard-header">
+      <div><span class="workspace-overline">Calendar overview</span><h1>Overview</h1><p>Your meetings, availability and booking experience in one place.</p></div>
+      <a class="primary-btn new-event-cta" href="#create-event">+ New meeting type</a>
+    </header>
+    <div class="stats-grid" aria-label="Scheduling metrics">
+      <div class="stat-card"><span>Upcoming meetings</span><strong>{{ upcoming }}</strong><p>Confirmed future bookings</p></div>
+      <div class="stat-card"><span>Meeting links</span><strong>{{ events|length }}</strong><p>{{ active_links }} active booking links</p></div>
+      <div class="stat-card"><span>Confirmed bookings</span><strong>{{ confirmed_total }}</strong><p>All-time confirmed</p></div>
+      <div class="stat-card"><span>Hours scheduled</span><strong>{{ upcoming_hours }}</strong><p>Upcoming confirmed meetings</p></div>
+    </div>
+    <div class="workspace-highlights">
+      <section class="highlight-panel upcoming-panel" aria-label="Upcoming meetings summary">
+        <div class="highlight-heading"><div><h2>Upcoming meetings</h2><p>Keep every conversation moving.</p></div><a class="link-button" href="#bookings">View all →</a></div>
+        <div class="meeting-list">
+          {% for b in next_meetings %}
+            <div class="meeting-row">
+              <time class="meeting-time" datetime="{{ b.start_utc.isoformat() }}">{{ b.start_utc | local_time('%I:%M %p') }}</time>
+              <div class="meeting-subject"><strong>{{ b.event_type.title }}</strong><small>{{ b.guest_name }}</small></div>
+              <span class="status is-confirmed">Confirmed</span>
+            </div>
+          {% else %}
+            <div class="meeting-empty"><strong>Your next meeting will show up here.</strong><p>Share a booking link to fill your calendar.</p><a class="link-button" href="#events">Browse meeting links →</a></div>
+          {% endfor %}
+        </div>
+      </section>
+      <section class="highlight-panel insights-panel" aria-label="Next seven days bookings chart">
+        <div class="highlight-heading"><div><h2>Scheduling snapshot</h2><p>Bookings over the next seven days</p></div></div>
+        <div class="insights-chart" role="img" aria-label="Confirmed bookings by day over the next seven days">
+          {% for data in chart_days %}<div class="chart-column" title="{{ data.date }}: {{ data.count }} meetings"><div class="chart-track"><span class="chart-bar {% if loop.index == 4 %}chart-bar-accent{% endif %}" style="height:{{ data.height }}%"></span></div><small>{{ data.label }}</small></div>{% endfor %}
+        </div>
+        <p class="chart-caption">{{ weekly_count }} meeting{{ '' if weekly_count == 1 else 's' }} in the next 7 days · {{ tz }}</p>
+      </section>
+    </div>
+    <div class="workspace-details-header"><span class="eyebrow">WORKSPACE MANAGEMENT</span><form method="post" action="/admin/logout"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="secondary-btn" type="submit">Sign out ↗</button></form></div>
 <section class="admin-section" id="bookings"><div class="section-heading"><div><span class="eyebrow">MEETING ACTIVITY</span><h2>Bookings</h2></div></div>
 <form method="get" action="/admin" class="booking-filter-bar" aria-label="Filter bookings">
 <label class="sr-only" for="booking-q">Search by guest or notes</label><input id="booking-q" class="text-input" name="q" maxlength="120" value="{{ filter_query }}" placeholder="Search guest, email or notes">
@@ -28,7 +75,7 @@
 </form>
 </details>
 </article>{% endfor %}</div>
-<form class="admin-form" method="post" action="/admin/events"><input type="hidden" name="token" value="{{ csrf_token }}"><h3>＋ Create a meeting type</h3><div class="admin-form-grid"><div><label class="field-label">Meeting title</label><input class="text-input" name="title" required minlength="2" maxlength="160" placeholder="Portfolio review"></div><div><label class="field-label">Link slug</label><input class="text-input" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required placeholder="portfolio-review"></div><div><label class="field-label">Duration</label><select class="text-input" name="duration_min"><option>15</option><option selected>30</option><option>45</option><option>60</option><option>90</option><option>120</option></select></div><div><label class="field-label">Description</label><input class="text-input" name="description" maxlength="1000" placeholder="What is this meeting for?"></div></div><button class="primary-btn" type="submit">Create link <span>↗</span></button></form>
+<form id="create-event" class="admin-form" method="post" action="/admin/events"><input type="hidden" name="token" value="{{ csrf_token }}"><h3>＋ Create a meeting type</h3><div class="admin-form-grid"><div><label class="field-label">Meeting title</label><input class="text-input" name="title" required minlength="2" maxlength="160" placeholder="Portfolio review"></div><div><label class="field-label">Link slug</label><input class="text-input" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required placeholder="portfolio-review"></div><div><label class="field-label">Duration</label><select class="text-input" name="duration_min"><option>15</option><option selected>30</option><option>45</option><option>60</option><option>90</option><option>120</option></select></div><div><label class="field-label">Description</label><input class="text-input" name="description" maxlength="1000" placeholder="What is this meeting for?"></div></div><button class="primary-btn" type="submit">Create link <span>↗</span></button></form>
 </section>
 <section class="admin-section" id="availability"><div class="section-heading"><div><span class="eyebrow">WEEKLY SCHEDULE</span><h2>Working hours</h2></div><p>One time block per weekday in this first version.</p></div>
 <form class="admin-form" method="post" action="/admin/availability"><input type="hidden" name="token" value="{{ csrf_token }}"><div class="availability-grid">{% for day in days %}{% set i = loop.index0 %}{% set s = schedule.get(i) %}<div class="availability-row"><label class="checkbox-label"><input type="checkbox" name="enabled_{{ i }}" {% if s %}checked{% endif %}><span>{{ day }}</span></label><div><label class="sr-only" for="start-{{ i }}">Start {{ day }}</label><input id="start-{{ i }}" class="text-input time-input" type="time" name="start_{{ i }}" value="{% if s %}{{ '%02d:%02d'|format(s.start_min // 60, s.start_min % 60) }}{% else %}09:00{% endif %}"></div><span class="time-sep">to</span><div><label class="sr-only" for="end-{{ i }}">End {{ day }}</label><input id="end-{{ i }}" class="text-input time-input" type="time" name="end_{{ i }}" value="{% if s %}{{ '%02d:%02d'|format(s.end_min // 60, s.end_min % 60) }}{% else %}17:00{% endif %}"></div></div>{% endfor %}</div><button class="primary-btn" type="submit">Save availability <span>✓</span></button></form></section>
@@ -49,5 +96,6 @@
     </div>
   {% else %}<p class="muted-tip">No blocked dates. Your regular working hours apply.</p>{% endfor %}</div>
 </section>
-
+  </div>
+</div>
 {% endblock %}
