@@ -11,6 +11,9 @@ import io
 import os
 import re
 import secrets
+import threading
+import time as monotonic_time
+from collections import defaultdict, deque
 import smtplib
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta, timezone
@@ -116,7 +119,37 @@ async def lifespan(_app: FastAPI):
         db.commit()
     yield
 
-app = FastAPI(title="ZEQORO", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="ZEQORO", version="0.3.0", lifespan=lifespan)
+
+class SlidingWindowLimiter:
+    """Single-process rate limit. Use Redis for multi-worker deployment."""
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._entries = defaultdict(deque)
+    def check(self, scope: str, key: str, limit: int, window: int) -> bool:
+        now = monotonic_time.monotonic()
+        identifier = (scope, key)
+        with self._lock:
+            events = self._entries[identifier]
+            while events and events[0] <= now - window:
+                events.popleft()
+            if len(events) >= limit:
+                return False
+            events.append(now)
+            return True
+    def clear(self, scope: str, key: str) -> None:
+        with self._lock:
+            self._entries.pop((scope, key), None)
+
+limiter = SlidingWindowLimiter()
+def client_key(request: Request) -> str:
+    # Ignore spoofable X-Forwarded-For unless trusted proxy settings are added.
+    return request.client.host if request.client else "unknown"
+
+def throttle(request: Request, scope: str, *, limit: int, window: int) -> None:
+    if not limiter.check(scope, client_key(request), limit, window):
+        raise HTTPException(429, "Too many requests. Please try again later.", headers={"Retry-After": str(window)})
+
 app.add_middleware(SessionMiddleware, secret_key=APP_SECRET, same_site="lax", https_only=COOKIE_SECURE, max_age=60*60*24*3)
 @app.middleware("http")
 async def privacy_headers(request: Request, call_next):
@@ -197,7 +230,10 @@ def parse_selected_start(value: str) -> tuple[datetime, date]:
         selected = datetime.fromisoformat(value)
         if selected.tzinfo is None:
             raise ValueError()
-        selected_day = selected.astimezone(HOST_TZ).date()
+        host_equivalent = selected.astimezone(HOST_TZ)
+        if selected.utcoffset() != host_equivalent.utcoffset():
+            raise ValueError()
+        selected_day = host_equivalent.date()
         return selected, selected_day
     except ValueError as exc:
         raise ValueError("Please choose a valid appointment time.") from exc
@@ -278,6 +314,7 @@ def slots_api(slug: str, day: str):
 
 @app.post("/book/{slug}")
 def book(slug: str, request: Request, tasks: BackgroundTasks, guest_name: str = Form(...), guest_email: str = Form(...), start: str = Form(...), notes: str = Form("")):
+    throttle(request, "public_booking", limit=12, window=3600)
     guest_name, guest_email, notes = guest_name.strip(), guest_email.strip(), notes.strip()
     if len(guest_name) < 2 or len(guest_name) > 160 or len(notes) > 2000:
         return public_error(request, "Please enter a valid name (2–160 characters) and a shorter note.")
@@ -325,6 +362,7 @@ def cancel_page(token: str, request: Request):
 
 @app.post("/cancel/{token}")
 def cancel_booking(token: str, request: Request):
+    throttle(request, "cancel", limit=25, window=3600)
     with SessionLocal() as db:
         booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
         if not booking:
@@ -369,6 +407,7 @@ def reschedule_booking(token: str, request: Request, tasks: BackgroundTasks, sta
         selected, selected_day = parse_selected_start(start)
     except ValueError as exc:
         return public_error(request, str(exc))
+    throttle(request, "reschedule", limit=25, window=3600)
     with SessionLocal() as db:
         write_serialize(db)
         booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
@@ -398,14 +437,27 @@ def ics(token: str):
         def esc(value):
             return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\\;")
         body = "\r\n".join([
-            "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ZEQORO//EN", "BEGIN:VEVENT",
-            f"UID:booking-{booking.id}@zeqoro.local", f"DTSTAMP:{fmt(datetime.now(timezone.utc))}",
+            "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ZEQORO//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+            f"UID:booking-{booking.id}@zeqoro.local", f"DTSTAMP:{fmt(datetime.now(timezone.utc))}", "STATUS:CONFIRMED",
             f"DTSTART:{fmt(booking.start_utc)}", f"DTEND:{fmt(booking.end_utc)}",
             f"SUMMARY:{esc(booking.event_type.title + ' with ' + HOST_NAME)}",
             f"DESCRIPTION:{esc('Guest: ' + booking.guest_name)}",
             "END:VEVENT", "END:VCALENDAR", "",
         ])
-        return Response(body, media_type="text/calendar; charset=utf-8", headers={"Content-Disposition": "attachment; filename=meeting.ics"})
+        # RFC 5545 requires folding UTF-8 lines at 75 octets.
+        folded = []
+        for line in body.split("\r\n"):
+            if not line:
+                continue
+            segment = ""
+            for ch in line:
+                if len((segment + ch).encode("utf-8")) > 75:
+                    folded.append(segment)
+                    segment = " " + ch
+                else:
+                    segment += ch
+            folded.append(segment)
+        return Response("\r\n".join(folded) + "\r\n", media_type="text/calendar; charset=utf-8", headers={"Content-Disposition": "attachment; filename=meeting.ics"})
 
 @app.get("/admin/login", response_class=HTMLResponse)
 def login_page(request: Request):
@@ -415,7 +467,9 @@ def login_page(request: Request):
 
 @app.post("/admin/login")
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    throttle(request, "admin_login", limit=8, window=900)
     if hmac.compare_digest(username, ADMIN_USER) and hmac.compare_digest(password, ADMIN_PASSWORD):
+        limiter.clear("admin_login", client_key(request))
         request.session.clear()
         request.session["admin"] = True
         request.session["csrf"] = secrets.token_urlsafe(32)
@@ -429,17 +483,26 @@ def logout(request: Request, token: str = Form(...)):
     return RedirectResponse("/", 303)
 
 @app.get("/admin", response_class=HTMLResponse)
-def dashboard(request: Request):
+def dashboard(request: Request, status: str = "all", q: str = ""):
     admin_only(request)
+    if status not in {"all", "confirmed", "cancelled"} or len(q) > 120:
+        raise HTTPException(400, "Invalid booking filter")
+    q = q.strip()
     with SessionLocal() as db:
         events = db.scalars(select(EventType).order_by(EventType.id)).all()
-        bookings = db.scalars(select(Booking).order_by(Booking.start_utc.desc()).limit(100)).all()
+        query = select(Booking)
+        if status != "all":
+            query = query.where(Booking.status == status)
+        if q:
+            term = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            query = query.where((Booking.guest_name.ilike(term, escape="\\")) | (Booking.guest_email.ilike(term, escape="\\")) | (Booking.notes.ilike(term, escape="\\")))
+        bookings = db.scalars(query.order_by(Booking.start_utc.desc()).limit(100)).all()
         schedule = {a.weekday: a for a in db.scalars(select(Availability)).all()}
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         upcoming = db.scalar(select(func.count()).select_from(Booking).where(Booking.status == "confirmed", Booking.start_utc >= now)) or 0
         cancelled = db.scalar(select(func.count()).select_from(Booking).where(Booking.status == "cancelled")) or 0
         blocked_dates = db.scalars(select(BlockedDate).order_by(BlockedDate.day)).all()
-        return page(request, "admin.html", events=events, bookings=bookings, schedule=schedule, days=DAYS, now=now, upcoming=upcoming, cancelled=cancelled, blocked_dates=blocked_dates, csrf_token=request.session["csrf"])
+        return page(request, "admin.html", events=events, bookings=bookings, schedule=schedule, days=DAYS, now=now, upcoming=upcoming, cancelled=cancelled, blocked_dates=blocked_dates, csrf_token=request.session["csrf"], filter_status=status, filter_query=q)
 
 @app.post("/admin/events")
 def new_event(request: Request, token: str = Form(...), slug: str = Form(...), title: str = Form(...), description: str = Form(""), duration_min: int = Form(...)):
