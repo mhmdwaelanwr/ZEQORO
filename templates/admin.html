@@ -1,28 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Dashboard · ZEQORO<section class="admin-section" id="blocked-days">
-  <div class="section-heading"><div><span class="eyebrow">TIME OFF</span><h2>Blocked dates</h2></div><p>Close bookings on vacation days or holidays without changing your weekly availability.</p></div>
-  <form class="admin-form" method="post" action="/admin/blocked-dates">
-    <input type="hidden" name="token" value="{{ csrf_token }}">
-    <h3>＋ Block a day</h3>
-    <div class="admin-form-grid">
-      <div><label class="field-label" for="blocked-day">Date</label><input id="blocked-day" class="text-input" name="day" type="date" min="{{ now | local_time('%Y-%m-%d') }}" required></div>
-      <div><label class="field-label" for="blocked-reason">Reason (optional)</label><input id="blocked-reason" class="text-input" name="reason" maxlength="160" placeholder="Holiday or time off"></div>
-    </div>
-    <button type="submit" class="primary-btn">Block this day</button>
-  </form>
-  <div class="availability-list">{% for block in blocked_dates %}
-    <div class="blocked-row"><div><strong>{{ block.day }}</strong><small>{{ block.reason }}</small></div>
-      <form method="post" action="/admin/blocked-dates/{{ block.id }}/remove"><input type="hidden" name="token" value="{{ csrf_token }}"><button type="submit" class="secondary-btn">Remove block</button></form>
-    </div>
-  {% else %}<p class="muted-tip">No blocked dates. Your regular working hours apply.</p>{% endfor %}</div>
-</section>
-{% endblock %}
+{% block title %}Dashboard · ZEQORO{% endblock %}
 {% block content %}
 <div class="dashboard-header"><div><span class="eyebrow">YOUR WORKSPACE</span><h1>Calendar overview<span class="gradient-word">.</span></h1><p>A clearer control center for bookings, meeting rules and days off.</p></div><form method="post" action="/admin/logout"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="secondary-btn" type="submit">Sign out ↗</button></form></div>
 <nav class="dashboard-tabs"><a href="#bookings">Bookings</a><a href="#events">Meeting types</a><a href="#availability">Availability</a><a href="#blocked-days">Days off</a><a href="/">Public page ↗</a></nav>
 <div class="stats-grid"><div class="stat-card"><span class="eyebrow">ALL UPCOMING</span><strong>{{ upcoming }}</strong><p>Confirmed future bookings</p></div><div class="stat-card"><span class="eyebrow">EVENT TYPES</span><strong>{{ events|length }}</strong><p>Meeting link configurations</p></div><div class="stat-card"><span class="eyebrow">TIME ZONE</span><strong class="stat-tz">{{ tz }}</strong><p>Host-local availability and bookings</p></div></div>
 <section class="admin-section" id="bookings"><div class="section-heading"><div><span class="eyebrow">MEETING ACTIVITY</span><h2>Bookings</h2></div></div>
-<div class="admin-tool-row"><p class="muted-tip">Latest 100 bookings shown. Export includes all bookings.</p><a href="/admin/bookings.csv" class="secondary-btn">↓ Export all bookings (.csv)</a></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Guest</th><th>Meeting</th><th>Start time ({{ tz }})</th><th>Status</th><th>Action</th></tr></thead><tbody>{% for b in bookings %}<tr><td><strong>{{ b.guest_name }}</strong><small>{{ b.guest_email }}</small></td><td>{{ b.event_type.title }}</td><td>{{ b.start_utc | local_time }}</td><td><span class="status {% if b.status == 'confirmed' %}is-confirmed{% else %}is-cancelled{% endif %}">{{ b.status }}</span></td><td>{% if b.status == 'confirmed' %}<form method="post" action="/admin/bookings/{{ b.id }}/cancel" onsubmit="return confirm('Cancel booking?');"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="link-button" type="submit">Cancel</button></form>{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5" class="empty-cell">No bookings yet. Share one of your links below.</td></tr>{% endfor %}</tbody></table></div></section>
+<form method="get" action="/admin" class="booking-filter-bar" aria-label="Filter bookings">
+<label class="sr-only" for="booking-q">Search by guest or notes</label><input id="booking-q" class="text-input" name="q" maxlength="120" value="{{ filter_query }}" placeholder="Search guest, email or notes">
+<label class="sr-only" for="booking-status">Booking status</label><select id="booking-status" class="text-input" name="status"><option value="all" {% if filter_status == 'all' %}selected{% endif %}>All statuses</option><option value="confirmed" {% if filter_status == 'confirmed' %}selected{% endif %}>Confirmed</option><option value="cancelled" {% if filter_status == 'cancelled' %}selected{% endif %}>Cancelled</option></select>
+<button class="secondary-btn" type="submit">Apply filters</button><a class="link-button" href="/admin#bookings">Reset</a></form>
+<div class="admin-tool-row"><p class="muted-tip">Latest 100 matching bookings shown. Export includes all bookings.</p><a href="/admin/bookings.csv" class="secondary-btn">↓ Export all bookings (.csv)</a></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Guest</th><th>Meeting</th><th>Start time ({{ tz }})</th><th>Status</th><th>Action</th></tr></thead><tbody>{% for b in bookings %}<tr><td><strong>{{ b.guest_name }}</strong><small>{{ b.guest_email }}</small></td><td>{{ b.event_type.title }}</td><td>{{ b.start_utc | local_time }}</td><td><span class="status {% if b.status == 'confirmed' %}is-confirmed{% else %}is-cancelled{% endif %}">{{ b.status }}</span></td><td>{% if b.status == 'confirmed' %}<form method="post" action="/admin/bookings/{{ b.id }}/cancel" onsubmit="return confirm('Cancel booking?');"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="link-button" type="submit">Cancel</button></form>{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5" class="empty-cell">No bookings yet. Share one of your links below.</td></tr>{% endfor %}</tbody></table></div></section>
 <section class="admin-section" id="events"><div class="section-heading"><div><span class="eyebrow">YOUR BOOKING LINKS</span><h2>Meeting types</h2></div></div>
 <div class="admin-event-grid">{% for event in events %}<article class="admin-event"><div class="event-card-top"><span class="event-icon">✳</span><span class="status {% if event.is_active %}is-confirmed{% else %}is-cancelled{% endif %}">{{ 'Active' if event.is_active else 'Hidden' }}</span></div><h3>{{ event.title }}</h3><p>{{ event.duration_min }} min · /book/{{ event.slug }}</p><div class="admin-event-footer"><a class="link-button" href="/book/{{ event.slug }}" target="_blank">View link ↗</a><form method="post" action="/admin/events/{{ event.id }}/toggle"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="link-button" type="submit">{{ 'Hide' if event.is_active else 'Activate' }}</button></form></div>
 <details><summary>Edit meeting settings</summary>
@@ -45,4 +32,22 @@
 </section>
 <section class="admin-section" id="availability"><div class="section-heading"><div><span class="eyebrow">WEEKLY SCHEDULE</span><h2>Working hours</h2></div><p>One time block per weekday in this first version.</p></div>
 <form class="admin-form" method="post" action="/admin/availability"><input type="hidden" name="token" value="{{ csrf_token }}"><div class="availability-grid">{% for day in days %}{% set i = loop.index0 %}{% set s = schedule.get(i) %}<div class="availability-row"><label class="checkbox-label"><input type="checkbox" name="enabled_{{ i }}" {% if s %}checked{% endif %}><span>{{ day }}</span></label><div><label class="sr-only" for="start-{{ i }}">Start {{ day }}</label><input id="start-{{ i }}" class="text-input time-input" type="time" name="start_{{ i }}" value="{% if s %}{{ '%02d:%02d'|format(s.start_min // 60, s.start_min % 60) }}{% else %}09:00{% endif %}"></div><span class="time-sep">to</span><div><label class="sr-only" for="end-{{ i }}">End {{ day }}</label><input id="end-{{ i }}" class="text-input time-input" type="time" name="end_{{ i }}" value="{% if s %}{{ '%02d:%02d'|format(s.end_min // 60, s.end_min % 60) }}{% else %}17:00{% endif %}"></div></div>{% endfor %}</div><button class="primary-btn" type="submit">Save availability <span>✓</span></button></form></section>
+<section class="admin-section" id="blocked-days">
+  <div class="section-heading"><div><span class="eyebrow">TIME OFF</span><h2>Blocked dates</h2></div><p>Close bookings on vacation days or holidays without changing your weekly availability.</p></div>
+  <form class="admin-form" method="post" action="/admin/blocked-dates">
+    <input type="hidden" name="token" value="{{ csrf_token }}">
+    <h3>＋ Block a day</h3>
+    <div class="admin-form-grid">
+      <div><label class="field-label" for="blocked-day">Date</label><input id="blocked-day" class="text-input" name="day" type="date" min="{{ now | local_time('%Y-%m-%d') }}" required></div>
+      <div><label class="field-label" for="blocked-reason">Reason (optional)</label><input id="blocked-reason" class="text-input" name="reason" maxlength="160" placeholder="Holiday or time off"></div>
+    </div>
+    <button type="submit" class="primary-btn">Block this day</button>
+  </form>
+  <div class="availability-list">{% for block in blocked_dates %}
+    <div class="blocked-row"><div><strong>{{ block.day }}</strong><small>{{ block.reason }}</small></div>
+      <form method="post" action="/admin/blocked-dates/{{ block.id }}/remove"><input type="hidden" name="token" value="{{ csrf_token }}"><button type="submit" class="secondary-btn">Remove block</button></form>
+    </div>
+  {% else %}<p class="muted-tip">No blocked dates. Your regular working hours apply.</p>{% endfor %}</div>
+</section>
+
 {% endblock %}
