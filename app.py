@@ -29,7 +29,7 @@ from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, select, text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, select, text, func, exists
 from sqlalchemy.exc import SQLAlchemyError
 from infra import RedisWindowLimiter, LimiterUnavailable, redis_client_from_url
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
@@ -155,9 +155,11 @@ async def lifespan(_app: FastAPI):
             ])
             db.add_all([Availability(weekday=i, start_min=9*60, end_min=17*60) for i in range(5)])
         db.commit()
+    import team
+    team.seed()
     yield
 
-app = FastAPI(title="ZEQORO", version="0.7.0", lifespan=lifespan)
+app = FastAPI(title="ZEQORO", version="0.8.0", lifespan=lifespan)
 
 class SlidingWindowLimiter:
     """Single-process throttle. Replace with Redis before multi-worker deployment."""
@@ -202,7 +204,7 @@ async def privacy_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    if request.url.path.startswith(("/admin", "/confirmed/", "/cancel/", "/reschedule/", "/ics/")):
+    if request.url.path.startswith(("/admin", "/team", "/confirmed/", "/cancel/", "/reschedule/", "/ics/")):
         response.headers["Cache-Control"] = "no-store, private"
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
@@ -220,7 +222,7 @@ def local_time(dt_utc: datetime, fmt: str = "%a, %d %b %Y · %I:%M %p") -> str:
 templates.env.filters["local_time"] = local_time
 
 def page(request: Request, name: str, **context):
-    return templates.TemplateResponse(request, name, {"host": HOST_NAME, "tz": TZ_NAME, "base_url": PUBLIC_BASE_URL, **context})
+    return templates.TemplateResponse(request, name, {"host": HOST_NAME, "tz": TZ_NAME, "base_url": PUBLIC_BASE_URL, "team_org_slug": os.getenv("TEAM_ORG_SLUG", "zeqoro-team"), **context})
 
 def utc_naive(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
@@ -242,6 +244,13 @@ def available_slots(db: Session, event: EventType, day: date, *, ignore_booking_
     query = select(Booking).where(Booking.status == "confirmed", Booking.end_utc >= low, Booking.start_utc <= high)
     if ignore_booking_id is not None:
         query = query.where(Booking.id != ignore_booking_id)
+    # Legacy links belong to the original host, not every unrelated team member.
+    import team
+    owner_id = db.scalar(select(team.Member.id).where(team.Member.role == "owner"))
+    if owner_id is not None:
+        team_only = exists(select(team.TeamBooking.booking_id).where(team.TeamBooking.booking_id == Booking.id))
+        owner_assignment = exists(select(team.BookingAssignee.id).where(team.BookingAssignee.booking_id == Booking.id, team.BookingAssignee.member_id == owner_id))
+        query = query.where((~team_only) | owner_assignment)
     existing = db.scalars(query).all()
     external_busy = calendar_busy(db, day)
     result = []
@@ -332,6 +341,9 @@ def sync_google_booking(booking_id: int) -> str:
     A persistent event ID ensures retries don't create duplicate events.
     """
     with SessionLocal() as db:
+        import team
+        if db.get(team.TeamBooking, booking_id):
+            return "team_booking_no_member_google_connection"
         booking = db.get(Booking, booking_id)
         if not booking:
             return "missing"
@@ -399,7 +411,7 @@ def csrf(request: Request, token: str):
         raise HTTPException(403, detail="Invalid session or CSRF token")
 
 def public_error(request: Request, message: str, status: int = 400):
-    return templates.TemplateResponse(request, "error.html", {"host": HOST_NAME, "tz": TZ_NAME, "base_url": PUBLIC_BASE_URL, "message": message}, status_code=status)
+    return templates.TemplateResponse(request, "error.html", {"host": HOST_NAME, "tz": TZ_NAME, "base_url": PUBLIC_BASE_URL, "team_org_slug": os.getenv("TEAM_ORG_SLUG", "zeqoro-team"), "message": message}, status_code=status)
 
 def booking_email(to_email: str, guest_name: str, event_title: str, start: datetime, token: str):
     host = os.getenv("SMTP_HOST", "")
@@ -522,7 +534,10 @@ def confirmed(token: str, request: Request):
         booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
         if not booking:
             return public_error(request, "This confirmation link is invalid.", 404)
-        return page(request, "confirmed.html", booking=booking, google_link=booking_google_link(db, booking.id), google_connected=bool(google_connection(db)))
+        import team
+        team_booking = db.get(team.TeamBooking, booking.id)
+        assignees = [a.member.name for a in db.scalars(select(team.BookingAssignee).where(team.BookingAssignee.booking_id == booking.id)).all()] if team_booking else []
+        return page(request, "confirmed.html", booking=booking, assigned_team=assignees, google_link=None if team_booking else booking_google_link(db, booking.id), google_connected=bool(google_connection(db)) if not team_booking else False)
 
 @app.get("/cancel/{token}", response_class=HTMLResponse)
 def cancel_page(token: str, request: Request):
@@ -558,7 +573,9 @@ def reschedule_page(token: str, request: Request):
             return public_error(request, "This meeting can no longer be rescheduled.", 409)
         event = booking.event_type
         today = datetime.now(HOST_TZ).date()
-        return page(request, "reschedule.html", booking=booking, event=event, today=today.isoformat(), default_day=booking.start_utc.replace(tzinfo=timezone.utc).astimezone(HOST_TZ).date().isoformat(), max_date=(datetime.now(HOST_TZ) + timedelta(days=event.max_advance_days)).date().isoformat())
+        import team
+        team_booking = db.get(team.TeamBooking, booking.id)
+        return page(request, "reschedule.html", booking=booking, event=event, team_reschedule=bool(team_booking), today=today.isoformat(), default_day=booking.start_utc.replace(tzinfo=timezone.utc).astimezone(HOST_TZ).date().isoformat(), max_date=(datetime.now(HOST_TZ) + timedelta(days=event.max_advance_days)).date().isoformat())
 
 @app.get("/api/reschedule-slots/{token}")
 def reschedule_slots(token: str, day: str):
@@ -572,7 +589,10 @@ def reschedule_slots(token: str, day: str):
             raise HTTPException(404, "Booking not found")
         if booking.status != "confirmed" or booking.start_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
             raise HTTPException(409, "Booking is no longer active")
-        return {"slots": available_slots(db, booking.event_type, parsed, ignore_booking_id=booking.id), "timezone": TZ_NAME}
+        import team
+        team_booking = db.get(team.TeamBooking, booking.id)
+        slots = team.reschedule_slots(db, booking, parsed) if team_booking else available_slots(db, booking.event_type, parsed, ignore_booking_id=booking.id)
+        return {"slots": slots, "timezone": TZ_NAME}
 
 @app.post("/reschedule/{token}")
 def reschedule_booking(token: str, request: Request, tasks: BackgroundTasks, start: str = Form(...)):
@@ -591,14 +611,18 @@ def reschedule_booking(token: str, request: Request, tasks: BackgroundTasks, sta
             db.rollback()
             return public_error(request, "This meeting can no longer be rescheduled.", 409)
         event = booking.event_type
-        if selected.isoformat() not in {slot["start"] for slot in available_slots(db, event, selected_day, ignore_booking_id=booking.id)}:
+        import team
+        team_booking = db.get(team.TeamBooking, booking.id)
+        valid_slots = team.reschedule_slots(db, booking, selected_day) if team_booking else available_slots(db, event, selected_day, ignore_booking_id=booking.id)
+        if selected.isoformat() not in {slot["start"] for slot in valid_slots}:
             db.rollback()
             return public_error(request, "This time is unavailable. Choose a different time.", 409)
         booking.start_utc = utc_naive(selected)
         booking.end_utc = utc_naive(selected + timedelta(minutes=event.duration_min))
         db.commit()
-        sync_google_booking(booking.id)
-        tasks.add_task(booking_email, booking.guest_email, booking.guest_name, "Updated: " + event.title, booking.start_utc, booking.cancel_token)
+        if not team_booking:
+            sync_google_booking(booking.id)
+            tasks.add_task(booking_email, booking.guest_email, booking.guest_name, "Updated: " + event.title, booking.start_utc, booking.cancel_token)
         return RedirectResponse(f"/confirmed/{token}", status_code=303)
 
 @app.get("/ics/{token}")
@@ -943,3 +967,10 @@ def google_retry_one(booking_id: int, request: Request, token: str = Form(...)):
             raise HTTPException(409, "Connect Google Calendar first")
     sync_google_booking(booking_id)
     return RedirectResponse("/admin/integrations", 303)
+
+
+# Register team tables and routes before ASGI startup creates all metadata.
+import sys
+sys.modules.pop("team", None)
+import team
+team.install(app)
