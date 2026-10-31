@@ -13,6 +13,7 @@
       <a href="#availability"><span aria-hidden="true">◷</span> Availability</a>
       <a href="#blocked-days"><span aria-hidden="true">◇</span> Time off</a>
       <a href="/" target="_blank" rel="noopener"><span aria-hidden="true">↗</span> Public page</a>
+      <a href="/admin/integrations"><span aria-hidden="true">⛓</span> Integrations {% if google_connected %}<span class="status is-confirmed">On</span>{% endif %}</a>
       <a href="/how-it-works" target="_blank" rel="noopener"><span aria-hidden="true">◈</span> Help &amp; guide</a>
     </nav>
     <div class="workspace-sidebar-footer"><span class="sidebar-avatar">{{ host[0]|upper }}</span><div><strong>{{ host }}</strong><small>{{ tz }}</small></div></div>
@@ -23,6 +24,7 @@
       <a class="primary-btn new-event-cta" href="#create-event">+ New meeting type</a>
     </header>
     <section class="workspace-share" aria-label="Share your booking page"><div><span class="eyebrow">YOUR PUBLIC BOOKING PAGE</span><strong>Ready for your next meeting?</strong><p>Share your booking page with colleagues, clients or collaborators.</p></div><div class="workspace-share-actions"><a class="secondary-btn" href="/" target="_blank" rel="noopener">View page ↗</a><button type="button" class="primary-btn" data-copy-url="{{ base_url }}/">Copy booking link</button></div></section>
+    <section class="workspace-share" aria-label="Google integration status"><div><span class="eyebrow">GOOGLE CALENDAR + MEET</span><strong>{{ 'Connected & syncing' if google_connected else 'Connect your Google Calendar' }}</strong><p>{{ google_sync_issues ~ ' sync item(s) need attention.' if google_connected and google_sync_issues else ('Avoid conflicts with your external meetings and create Meet links automatically.' if not google_connected else 'External availability blocks overlapping bookings.') }}</p></div><div class="workspace-share-actions"><a class="secondary-btn" href="/admin/integrations">Manage integrations ↗</a></div></section>
     <div class="stats-grid" aria-label="Scheduling metrics">
       <div class="stat-card"><span>Upcoming meetings</span><strong>{{ upcoming }}</strong><p>Confirmed future bookings</p></div>
       <div class="stat-card"><span>Meeting links</span><strong>{{ events|length }}</strong><p>{{ active_links }} active booking links</p></div>

@@ -51,7 +51,7 @@ Before public deployment, configure reverse-proxy TLS, `APP_ENV=production`, a H
 - A reschedule locks the database before rechecking availability, excludes its own current slot, preserves its private token, and saves the new interval atomically.
 - The admin CSV contains all bookings (including cancelled); untrusted guest text is escaped to reduce spreadsheet formula injection.
 - Private booking URLs are bearer capabilities. Anyone holding a URL can manage that booking; never share the link publicly.
-- No Google Calendar / Outlook free-busy integration yet. Only bookings in ZEQORO are considered busy.
+- In v0.6, connecting a Google Calendar enables free/busy checks; when disconnected, only local ZEQORO bookings are considered busy. Outlook is not yet supported.
 - Admin bookings table shows latest 100 records. Export contains all records; headline upcoming count is computed from the complete database.
 
 ## Run the tests
@@ -96,7 +96,7 @@ The **editable Figma frames** were translated into real FastAPI/Jinja pages, pre
 
 **Visual verification:** Browser navigation to localhost was blocked in the test container. We verified the rendered HTML/CSS using Chromium `set_content` with an offline availability stub: desktop and 390px mobile had no document-level horizontal overflow or JavaScript errors. This **does not** substitute for a real deployed-browser visual review or a pixel-diff against the Figma design.
 
-No calendar provider synchronization, production deployment, third-party logo, or paid SaaS billing is included.
+As of v0.4, no calendar provider synchronization, production deployment, third-party logo, or paid SaaS billing was included. See v0.6 for the optional Google integration.
 
 ## v0.5 unified website experience
 
@@ -107,4 +107,12 @@ No calendar provider synchronization, production deployment, third-party logo, o
 - Fixed shared booking JavaScript to support both new booking and private rescheduling (missing step controls no longer crash), and provided availability retry.
 - Shared accessible focus styles, responsive layouts, no new external runtime dependencies.
 
-These are visual/flow improvements only; external Google Calendar integration and a durable multi-tenant production backend are NOT implemented.
+The v0.5 changes were visual/flow improvements; optional Google Calendar integration was added in v0.6. Multi-tenant production architecture remains out of scope.
+
+## v0.6 — Google Calendar + Meet beta integration
+
+Connect your own Google Calendar in **Host workspace → Integrations** (`/admin/integrations`). OAuth 2.0 with CSRF state + PKCE, Fernet-encrypted offline credentials, Google Free/Busy slot exclusion, Calendar event creation with unique Google Meet links, updating existing events on rescheduling, cancellation propagation, and admin-controlled retries are implemented.
+
+**Configuration is required before the integration can connect or create events:** Google Cloud OAuth credentials, Calendar API enablement, the exact registered callback and `GOOGLE_TOKEN_ENCRYPTION_KEY` in your local `.env`. No Google account or credentials are bundled. See [GOOGLE-INTEGRATION.md](GOOGLE-INTEGRATION.md) for setup, security, operational limits and sources.
+
+This remains **single-host beta**, not a multi-tenant or production-safe calendar platform. Local booking confirmations can precede a successful Google sync; errors are surfaced and retriable. Do not use ephemeral SQLite or hardcoded credentials in production.

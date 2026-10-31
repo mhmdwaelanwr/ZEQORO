@@ -13,9 +13,17 @@ Private, self-hostable scheduling with elegant guest booking, then workflows for
 - [x] Guest-local time hints while preserving the host time zone as scheduling truth.
 - [x] Automated API and regression tests.
 
-## v0.3 — secure hosted beta
-- [ ] Google Calendar OAuth2 with offline token rotation, encryption at rest, least-privilege scopes and explicit user consent; free/busy check before committing.
-- [ ] Google Meet creation through Google Calendar events, token revocation and sync reconciliation.
+## v0.6 — Google Calendar / Meet integration beta
+- [x] Optional host-managed Google OAuth with explicit consent, PKCE and encrypted refresh token storage.
+- [x] External Google Free/Busy collision filtering; a failed provider check closes availability rather than permitting a risky booking.
+- [x] Create unique Google Calendar events + Google Meet links, propagate changes/cancellations, and expose manual retry/reconciliation controls.
+- [ ] Broader provider support (Outlook/Microsoft 365, CalDAV), multi-calendar selection, staff accounts and multi-tenant connection isolation.
+- [ ] Background job worker / outbox, shared OAuth token refresh, retry backoff, Google event watch/sync tokens and operational metrics.
+- [ ] Robust automated and manual integration tests with a real Google Cloud test account and verified consent screen.
+
+## Secure hosted production work remaining
+- [ ] Token revocation, secure key rotation and encrypted connection ownership for future multi-tenant use.
+- [ ] Fully automated event reconciliation and background Meet provisioning jobs with persistent retries.
 - [ ] Email queue with host/guest notifications, idempotency, cancellation and reschedule alerts.
 - [ ] Reverse-proxy protection: login/booking rate limits, bot controls, CSP cleanup and CSRF across every action.
 - [ ] Robust scheduling with multiple intervals/day, one-off availability overrides, timezone picker and DST transitions tests.

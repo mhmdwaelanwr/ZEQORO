@@ -129,3 +129,27 @@ body.zeqoro-admin .primary-btn{box-shadow:none}
 @media(max-width:720px){.site-header{height:auto;min-height:75px;flex-wrap:wrap;justify-content:center;padding:15px 0}.nav-links{width:100%;justify-content:center;flex-wrap:wrap;gap:4px}.nav-links a{padding:9px 10px;font-size:12px}body.zeqoro-booking .site-header{height:auto;width:min(100% - 26px,1180px)}body.zeqoro-booking .site-header .nav-links{display:flex}.container{width:calc(100% - 28px)}.home-hero-copy h1,.info-hero h1{font-size:clamp(41px,10vw,55px);letter-spacing:-2px}.section-heading{align-items:flex-start;flex-direction:column}.event-grid{grid-template-columns:1fr}.how-step{grid-template-columns:1fr;gap:14px}.how-mini-card{grid-column:auto}.how-step-number{font-size:30px}.bottom-cta{margin:0 0 15px}.hero-buttons a{flex:1;min-width:180px}.footer-links{gap:14px}body.zeqoro-admin .workspace-share{margin:0 0 22px;padding:18px}.state-page{margin:45px auto 70px}.state-actions{gap:10px}.state-actions a,.state-actions button{flex:1}body.zeqoro-booking .booking-shell{margin-bottom:0}}
 @media(max-width:420px){.hero-buttons{display:grid;grid-template-columns:1fr}.hero-buttons a{width:100%}.hero-showcase{padding:22px}.home-metrics>div{padding:14px}.login-card{padding:24px}.state-card{padding:20px}.nav-links .nav-chip{padding:9px}.workspace-share-actions{width:100%}.workspace-share-actions>*{flex:1}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ZEQORO v0.6 / Calendar integrations */
+.integration-page{max-width:1120px;margin:48px auto 96px;position:relative;z-index:1}
+.integration-top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:30px}
+.integration-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:32px}
+.integration-head h1{font-size:clamp(2rem,4vw,3rem);line-height:1.18;letter-spacing:-.03em;margin:0 0 12px}
+.integration-head p,.integration-explainer{color:#9caac3;line-height:1.8;max-width:620px}
+.integration-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
+.integration-card{background:#111a2f;border:1px solid #25314a;border-radius:20px;padding:32px;min-width:0}
+.integration-card h2{font-size:1.35rem;margin:0 0 8px}
+.integration-card-head{display:flex;align-items:center;gap:18px}
+.integration-card-head p{margin:0;color:#9caac3}
+.integration-mark{display:grid;place-items:center;width:56px;height:56px;border-radius:15px;background:#203353;color:#a5fcdb;font-size:27px;font-weight:800}
+.integration-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+.integration-stats{display:grid;grid-template-columns:minmax(110px,1fr) 2fr;gap:12px;margin:22px 0;font-size:.9rem}
+.integration-stats span{color:#9caac3}.integration-stats strong{overflow-wrap:anywhere}
+.integration-notice{padding:14px 18px;border-radius:12px;border:1px solid #42675b;background:#142e2c;color:#a5fcdb}
+.integration-warning{padding:12px 14px;border-radius:10px;background:#302819;border:1px solid #6b5732;color:#ffe3a4;font-size:.9rem;line-height:1.6}
+.integration-health{display:flex;align-items:center;gap:10px;margin:20px 0}
+.integration-indicator{width:10px;height:10px;border-radius:50%;background:#8995aa}
+.integration-indicator.connected{background:#a5fcdb}
+.integration-queue{margin-top:22px}.integration-queue .data-table small{display:block;max-width:340px;overflow-wrap:anywhere}
+.integration-bottom{margin-top:26px;color:#9caac3}.integration-bottom a{color:#a5fcdb}
+@media(max-width:800px){.integration-page{margin:28px auto 72px}.integration-grid{grid-template-columns:1fr}.integration-head{display:block}.integration-card{padding:22px}.integration-top{align-items:flex-start}.integration-head>.status{display:inline-block;margin-top:10px}}

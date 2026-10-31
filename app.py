@@ -21,6 +21,8 @@ from email.message import EmailMessage
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import google_integration as google
+
 from dotenv import load_dotenv
 from email_validator import EmailNotValidError, validate_email
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
@@ -91,6 +93,26 @@ class BlockedDate(Base):
     day: Mapped[str] = mapped_column(String(10), unique=True, index=True)
     reason: Mapped[str] = mapped_column(String(160), default="Unavailable")
 
+class GoogleConnection(Base):
+    """Single-host calendar authorization; refresh token is encrypted at rest."""
+    __tablename__ = "google_connections"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    encrypted_refresh_token: Mapped[str] = mapped_column(Text)
+    calendar_id: Mapped[str] = mapped_column(String(320), default="primary")
+    connected_utc: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+class GoogleEventLink(Base):
+    """Durable idempotency and retry state for each Google event."""
+    __tablename__ = "google_event_links"
+    booking_id: Mapped[int] = mapped_column(ForeignKey("bookings.id"), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(80), unique=True)
+    status: Mapped[str] = mapped_column(String(24), default="pending")
+    meet_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    synced_start_utc: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    synced_end_utc: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_utc: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
 class Booking(Base):
     __tablename__ = "bookings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -119,7 +141,7 @@ async def lifespan(_app: FastAPI):
         db.commit()
     yield
 
-app = FastAPI(title="ZEQORO", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="ZEQORO", version="0.6.0", lifespan=lifespan)
 
 class SlidingWindowLimiter:
     """Single-process throttle. Replace with Redis before multi-worker deployment."""
@@ -201,6 +223,7 @@ def available_slots(db: Session, event: EventType, day: date, *, ignore_booking_
     if ignore_booking_id is not None:
         query = query.where(Booking.id != ignore_booking_id)
     existing = db.scalars(query).all()
+    external_busy = calendar_busy(db, day)
     result = []
     for minute in range(availability.start_min, availability.end_min - event.duration_min + 1, 15):
         hour, rem = divmod(minute, 60)
@@ -225,6 +248,11 @@ def available_slots(db: Session, event: EventType, day: date, *, ignore_booking_
                 collision = True
                 break
         if not collision:
+            for busy_start, busy_end in external_busy:
+                if candidate_start < busy_end and candidate_end > busy_start:
+                    collision = True
+                    break
+        if not collision:
             result.append({"start": start_local.isoformat(), "label": start_local.strftime("%I:%M %p").lstrip("0")})
     return result
 
@@ -248,6 +276,97 @@ def write_serialize(db: Session) -> None:
     if engine.dialect.name == "sqlite":
         db.execute(text("BEGIN IMMEDIATE"))
 
+def google_settings() -> google.Settings | None:
+    return google.Settings.from_env(PUBLIC_BASE_URL)
+
+
+def google_connection(db: Session) -> GoogleConnection | None:
+    return db.get(GoogleConnection, 1)
+
+
+def calendar_busy(db: Session, day: date) -> list[tuple[datetime, datetime]]:
+    """Get actual busy times, conservatively failing closed for connected calendars."""
+    connection = google_connection(db)
+    if not connection:
+        return []
+    try:
+        settings = google_settings()
+        if not settings:
+            raise google.GoogleIntegrationError("Google credentials are not configured")
+        token = google.access_token(settings, connection.encrypted_refresh_token)
+        start = datetime.combine(day, time.min, tzinfo=HOST_TZ)
+        end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=HOST_TZ)
+        return google.freebusy(token, connection.calendar_id, start, end)
+    except google.GoogleIntegrationError as exc:
+        # Do not display slots we cannot verify against Google Calendar.
+        raise HTTPException(503, "Calendar availability is temporarily unavailable. Please retry shortly.") from exc
+
+
+def sync_google_booking(booking_id: int) -> str:
+    """Idempotent sync job. Persist links before calling Google; retry failed jobs in admin.
+
+    A local booking remains confirmed if Google fails; UI explicitly shows pending/error.
+    A persistent event ID ensures retries don't create duplicate events.
+    """
+    with SessionLocal() as db:
+        booking = db.get(Booking, booking_id)
+        if not booking:
+            return "missing"
+        connection = google_connection(db)
+        link = db.get(GoogleEventLink, booking_id)
+        if not connection:
+            return "not_connected"
+        if not link:
+            # Base32hex accepts digits and a-v; hexadecimal UUID is a valid subset.
+            link = GoogleEventLink(booking_id=booking.id, event_id="zq" + secrets.token_hex(16), status="pending")
+            db.add(link)
+            db.commit()
+        try:
+            settings = google_settings()
+            if not settings:
+                raise google.GoogleIntegrationError("Google connection configuration is missing")
+            token = google.access_token(settings, connection.encrypted_refresh_token)
+            if booking.status != "confirmed":
+                google.delete_event(token, connection.calendar_id, link.event_id)
+                link.status = "deleted"
+                link.meet_url = None
+            else:
+                details = google.event_data(
+                    booking.event_type.title, HOST_NAME, booking.guest_name,
+                    booking.guest_email, booking.start_utc, booking.end_utc,
+                    link.event_id, create_meet=True,
+                )
+                try:
+                    if link.synced_start_utc == booking.start_utc and link.synced_end_utc == booking.end_utc:
+                        result = google.get_event(token, connection.calendar_id, link.event_id)
+                    elif link.synced_start_utc is not None:
+                        details_update = dict(details)
+                        details_update.pop("id")
+                        details_update.pop("conferenceData")  # Preserve existing Meet room.
+                        result = google.patch_event(token, connection.calendar_id, link.event_id, details_update)
+                    else:
+                        result = google.insert_event(token, connection.calendar_id, details)
+                except google.GoogleEventMissing:
+                    # Account changed or event deleted externally. Recreate with the
+                    # same stable ID; Google will deduplicate if it already exists.
+                    result = google.insert_event(token, connection.calendar_id, details)
+                link.meet_url = google.meet_link(result)
+                link.status = "synced" if link.meet_url else "pending_meet"
+                link.synced_start_utc = booking.start_utc
+                link.synced_end_utc = booking.end_utc
+            link.last_error = None
+        except google.GoogleIntegrationError as exc:
+            link.status = "error"
+            link.last_error = str(exc)[:320]
+        link.updated_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.commit()
+        return link.status
+
+
+def booking_google_link(db: Session, booking_id: int) -> GoogleEventLink | None:
+    return db.get(GoogleEventLink, booking_id)
+
+
 def admin_only(request: Request):
     if not request.session.get("admin"):
         raise HTTPException(status_code=303, headers={"Location": "/admin/login"})
@@ -268,7 +387,15 @@ def booking_email(to_email: str, guest_name: str, event_title: str, start: datet
     email["From"] = sender
     email["To"] = to_email
     email["Subject"] = f"Confirmed: {event_title} with {HOST_NAME}"
-    email.set_content(f"Hello {guest_name},\n\nYour meeting is confirmed.\n{event_title}\n{local_time(start)} ({TZ_NAME})\n\nCancel: {PUBLIC_BASE_URL}/cancel/{token}\n\n— {HOST_NAME}")
+    meet = None
+    with SessionLocal() as db:
+        booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
+        if booking:
+            link = booking_google_link(db, booking.id)
+            if link and link.status == "synced":
+                meet = link.meet_url
+    meeting_detail = f"\nGoogle Meet: {meet}\n" if meet else "\nVideo meeting link: check your booking page for updates.\n"
+    email.set_content(f"Hello {guest_name},\n\nYour meeting is confirmed.\n{event_title}\n{local_time(start)} ({TZ_NAME})\n{meeting_detail}\nManage: {PUBLIC_BASE_URL}/confirmed/{token}\n\n— {HOST_NAME}")
     try:
         with smtplib.SMTP(host, int(os.getenv("SMTP_PORT", "587")), timeout=10) as server:
             if os.getenv("SMTP_USE_TLS", "true").lower() == "true":
@@ -350,6 +477,8 @@ def book(slug: str, request: Request, tasks: BackgroundTasks, guest_name: str = 
         booking = Booking(event_type_id=event.id, guest_name=guest_name, guest_email=guest_email, notes=notes, start_utc=utc_naive(selected), end_utc=utc_naive(selected + timedelta(minutes=event.duration_min)), status="confirmed", cancel_token=secrets.token_urlsafe(32))
         db.add(booking)
         db.commit()
+        # Remote write is idempotent and independently retriable if Google is offline.
+        sync_google_booking(booking.id)
         tasks.add_task(booking_email, booking.guest_email, booking.guest_name, event.title, booking.start_utc, booking.cancel_token)
         return RedirectResponse(f"/confirmed/{booking.cancel_token}", status_code=303)
 
@@ -359,7 +488,7 @@ def confirmed(token: str, request: Request):
         booking = db.scalar(select(Booking).where(Booking.cancel_token == token))
         if not booking:
             return public_error(request, "This confirmation link is invalid.", 404)
-        return page(request, "confirmed.html", booking=booking)
+        return page(request, "confirmed.html", booking=booking, google_link=booking_google_link(db, booking.id), google_connected=bool(google_connection(db)))
 
 @app.get("/cancel/{token}", response_class=HTMLResponse)
 def cancel_page(token: str, request: Request):
@@ -382,6 +511,7 @@ def cancel_booking(token: str, request: Request):
             return public_error(request, "You cannot cancel a meeting after its start time.")
         booking.status = "cancelled"
         db.commit()
+        sync_google_booking(booking.id)
         return RedirectResponse(f"/cancel/{token}", status_code=303)
 
 @app.get("/reschedule/{token}", response_class=HTMLResponse)
@@ -433,6 +563,7 @@ def reschedule_booking(token: str, request: Request, tasks: BackgroundTasks, sta
         booking.start_utc = utc_naive(selected)
         booking.end_utc = utc_naive(selected + timedelta(minutes=event.duration_min))
         db.commit()
+        sync_google_booking(booking.id)
         tasks.add_task(booking_email, booking.guest_email, booking.guest_name, "Updated: " + event.title, booking.start_utc, booking.cancel_token)
         return RedirectResponse(f"/confirmed/{token}", status_code=303)
 
@@ -445,12 +576,15 @@ def ics(token: str):
         fmt = lambda d: d.strftime("%Y%m%dT%H%M%SZ")
         def esc(value):
             return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\\;")
+        link = booking_google_link(db, booking.id)
+        meet = link.meet_url if link and link.status == "synced" else None
         body = "\r\n".join([
             "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ZEQORO//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
             f"UID:booking-{booking.id}@zeqoro.local", f"DTSTAMP:{fmt(datetime.now(timezone.utc))}", "STATUS:CONFIRMED",
             f"DTSTART:{fmt(booking.start_utc)}", f"DTEND:{fmt(booking.end_utc)}",
             f"SUMMARY:{esc(booking.event_type.title + ' with ' + HOST_NAME)}",
             f"DESCRIPTION:{esc('Guest: ' + booking.guest_name)}",
+            *([f"LOCATION:{esc(meet)}", f"URL:{meet}"] if meet else []),
             "END:VEVENT", "END:VCALENDAR", "",
         ])
         # RFC 5545: UTF-8 content lines must be folded at 75 octets.
@@ -527,7 +661,9 @@ def dashboard(request: Request, status: str = "all", q: str = ""):
         selected_ids = {b.id for b in bookings} if q or status != "all" else None
         next_meetings = [b for b in future_bookings if selected_ids is None or b.id in selected_ids][:4]
         blocked_dates = db.scalars(select(BlockedDate).order_by(BlockedDate.day)).all()
-        return page(request, "admin.html", events=events, bookings=bookings, schedule=schedule, days=DAYS, now=now, upcoming=upcoming, cancelled=cancelled, blocked_dates=blocked_dates, confirmed_total=confirmed_total, upcoming_hours=upcoming_hours, active_links=active_links, next_meetings=next_meetings, chart_days=chart_days, weekly_count=sum(booking_counts), csrf_token=request.session["csrf"], filter_status=status, filter_query=q)
+        connected = bool(google_connection(db))
+        sync_issues = db.scalar(select(func.count()).select_from(GoogleEventLink).where(GoogleEventLink.status.in_(["error", "pending", "pending_meet"]))) or 0
+        return page(request, "admin.html", google_connected=connected, google_sync_issues=sync_issues, events=events, bookings=bookings, schedule=schedule, days=DAYS, now=now, upcoming=upcoming, cancelled=cancelled, blocked_dates=blocked_dates, confirmed_total=confirmed_total, upcoming_hours=upcoming_hours, active_links=active_links, next_meetings=next_meetings, chart_days=chart_days, weekly_count=sum(booking_counts), csrf_token=request.session["csrf"], filter_status=status, filter_query=q)
 
 @app.post("/admin/events")
 def new_event(request: Request, token: str = Form(...), slug: str = Form(...), title: str = Form(...), description: str = Form(""), duration_min: int = Form(...)):
@@ -658,4 +794,114 @@ def admin_cancel(booking_id: int, request: Request, token: str = Form(...)):
             raise HTTPException(404)
         booking.status = "cancelled"
         db.commit()
+        sync_google_booking(booking.id)
     return RedirectResponse("/admin#bookings", 303)
+
+
+@app.get("/admin/integrations", response_class=HTMLResponse)
+def integrations_page(request: Request, message: str = ""):
+    admin_only(request)
+    with SessionLocal() as db:
+        connection = google_connection(db)
+        pending = db.scalars(select(GoogleEventLink).where(GoogleEventLink.status.in_(["error", "pending", "pending_meet"])).order_by(GoogleEventLink.updated_utc.desc()).limit(30)).all()
+        links = {b.booking_id: b for b in pending}
+        queue = [db.get(Booking, key) for key in links]
+        configured = False
+        config_error = ""
+        try:
+            configured = google_settings() is not None
+        except google.GoogleIntegrationError as exc:
+            config_error = str(exc)
+        allowed = {"connected": "Google Calendar connected successfully.", "disconnected": "Connection removed. Existing Google events remain on the calendar.", "synced": "Synchronization attempted; check the results below."}
+        return page(request, "integrations.html", connection=connection, configured=configured, config_error=config_error, queue=queue, links=links, csrf_token=request.session["csrf"], notice=allowed.get(message, ""))
+
+
+@app.post("/admin/google/connect")
+def google_connect(request: Request, token: str = Form(...)):
+    csrf(request, token)
+    settings = google_settings()
+    if not settings:
+        raise HTTPException(503, "Google Cloud OAuth is not configured")
+    state = secrets.token_urlsafe(32)
+    verifier = secrets.token_urlsafe(48)
+    request.session["google_oauth_state"] = state
+    request.session["google_pkce_verifier"] = verifier
+    return RedirectResponse(google.authorization_url(settings, state, verifier), 303)
+
+
+@app.get("/admin/google/callback")
+def google_callback(request: Request, state: str = "", code: str = "", error: str = ""):
+    admin_only(request)
+    saved_state = request.session.pop("google_oauth_state", None)
+    verifier = request.session.pop("google_pkce_verifier", None)
+    if not saved_state or not verifier or not state or not secrets.compare_digest(saved_state, state):
+        raise HTTPException(403, "Invalid Google OAuth state. Restart connection from integrations.")
+    if error or not code:
+        raise HTTPException(400, "Google authorization was declined or incomplete")
+    settings = google_settings()
+    if not settings:
+        raise HTTPException(503, "Google integration is not configured")
+    try:
+        result = google.exchange_code(settings, code, verifier)
+        granted = set(result.get("scope", "").split())
+        if not set(google.SCOPES).issubset(granted):
+            raise google.GoogleIntegrationError("Google Calendar permissions are incomplete")
+        if not result.get("refresh_token"):
+            raise google.GoogleIntegrationError("Google did not provide offline access; reconnect with consent")
+        encrypted = google.encrypt_secret(result["refresh_token"], settings)
+    except google.GoogleIntegrationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    with SessionLocal() as db:
+        current = google_connection(db)
+        if current:
+            current.encrypted_refresh_token = encrypted
+            current.calendar_id = "primary"
+        else:
+            db.add(GoogleConnection(id=1, encrypted_refresh_token=encrypted, calendar_id="primary"))
+        db.commit()
+    return RedirectResponse("/admin/integrations?message=connected", 303)
+
+
+@app.post("/admin/google/disconnect")
+def google_disconnect(request: Request, token: str = Form(...)):
+    csrf(request, token)
+    with SessionLocal() as db:
+        connected = google_connection(db)
+        if connected:
+            db.delete(connected)
+            db.commit()
+    return RedirectResponse("/admin/integrations?message=disconnected", 303)
+
+
+@app.post("/admin/google/sync")
+def google_sync(request: Request, token: str = Form(...)):
+    csrf(request, token)
+    with SessionLocal() as db:
+        if not google_connection(db):
+            raise HTTPException(409, "Connect Google Calendar first")
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        candidates = db.scalars(select(Booking).where(
+            (Booking.start_utc >= now) | (Booking.status == "cancelled")
+        ).order_by(Booking.created_utc.desc()).limit(150)).all()
+        ids = []
+        for booking in candidates:
+            link = booking_google_link(db, booking.id)
+            if (booking.status == "confirmed" and (not link or link.status != "synced" or link.synced_start_utc != booking.start_utc)) or (booking.status == "cancelled" and link and link.status != "deleted"):
+                ids.append(booking.id)
+                if len(ids) == 25:
+                    break
+    for booking_id in ids:
+        sync_google_booking(booking_id)
+    return RedirectResponse("/admin/integrations?message=synced", 303)
+
+
+@app.post("/admin/google/retry/{booking_id}")
+def google_retry_one(booking_id: int, request: Request, token: str = Form(...)):
+    csrf(request, token)
+    with SessionLocal() as db:
+        if not db.get(Booking, booking_id):
+            raise HTTPException(404)
+        if not google_connection(db):
+            raise HTTPException(409, "Connect Google Calendar first")
+    sync_google_booking(booking_id)
+    return RedirectResponse("/admin/integrations", 303)

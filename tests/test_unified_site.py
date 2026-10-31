@@ -16,7 +16,7 @@ def test_shared_design_system_and_public_guide(setup):
         assert '<title>' in html
     guide = client.get('/how-it-works').text
     assert 'Frequently asked questions.' in guide
-    assert 'Not yet' in guide  # Honest about Google Calendar integration.
+    assert 'connects Google Calendar' in guide  # Feature requires explicit host consent.
     assert 'No. Choose a meeting' in guide
     assert client.get('/static/unified.css').status_code == 200
     assert client.get('/static/site.js').status_code == 200
