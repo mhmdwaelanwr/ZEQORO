@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}Invitation created · ZEQORO{% endblock %}
+{% block content %}
+<div class="team-auth-wrap"><div class="team-auth-card"><span class="eyebrow">INVITATION READY</span><h1>Invite {{ display_name }} to your team</h1><p>This private link is displayed <strong>only now</strong>. Copy it and share it securely with the intended member. It expires in 72 hours.</p><label class="field-label" for="invite-url">One-time invitation link</label><input readonly id="invite-url" class="text-input" value="{{ invite_url }}" aria-label="Invitation URL"><button type="button" class="primary-btn wide" data-copy-url="{{ invite_url }}">Copy invite link</button><a class="team-back" href="/team">← Back to Team workspace</a></div></div>
+{% endblock %}

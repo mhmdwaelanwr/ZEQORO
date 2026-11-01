@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Integrations · ZEQORO{% endblock %}
+{% block body_class %}zeqoro-admin zeqoro-integrations{% endblock %}
+{% block content %}
+<div class="integration-page" id="integrations">
+  <div class="integration-top"><a href="/admin" class="link-button">← Back to workspace</a><span class="eyebrow">CONNECTED WORKFLOWS</span></div>
+  <div class="integration-head"><div><h1>Calendar &amp; video integrations</h1><p>Keep ZEQORO and Google Calendar in sync, with unique Google Meet links on every booking.</p></div><span class="status {{ 'is-confirmed' if connection else 'is-cancelled' }}">{{ 'Google connected' if connection else 'Not connected' }}</span></div>
+  {% if notice %}<p class="integration-notice" role="status">{{ notice }}</p>{% endif %}
+  <div class="integration-grid">
+    <section class="integration-card" aria-labelledby="google-title"><div class="integration-card-head"><div class="integration-mark">G</div><div><h2 id="google-title">Google Calendar</h2><p>Free/Busy • Google Meet • Invitations</p></div></div>
+      {% if connection %}
+      <p class="integration-explainer">Connected to the primary calendar. External busy events automatically block new ZEQORO time slots. New bookings request their own Google Meet room.</p>
+      <div class="integration-stats"><span>Calendar</span><strong>{{ connection.calendar_id }}</strong><span>Connected</span><strong>{{ connection.connected_utc | local_time }}</strong></div>
+      <div class="integration-actions">
+        <form method="post" action="/admin/google/sync"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="primary-btn" type="submit">Sync pending bookings ↻</button></form>
+        <form method="post" action="/admin/google/disconnect" onsubmit="return confirm('Disconnect Google? Existing Google events remain in your calendar.');"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="secondary-btn" type="submit">Disconnect account</button></form>
+      </div>
+      {% elif configured %}
+      <p class="integration-explainer">Connect your Google account securely. OAuth access is only used to check availability, manage ZEQORO-generated events and create unique Meet rooms.</p>
+      <form method="post" action="/admin/google/connect"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="primary-btn" type="submit">Connect Google Calendar ↗</button></form>
+      {% else %}
+      <p class="integration-explainer">Configure your Google Cloud OAuth client and encryption key in the server's <code>.env</code> file before connecting.</p>
+      {% if config_error %}<p class="integration-warning">{{ config_error }}</p>{% endif %}
+      <a class="secondary-btn" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Open Google Cloud credentials ↗</a>
+      {% endif %}
+      <p class="fineprint">Refresh tokens are encrypted in the ZEQORO database. Local bookings stay confirmed if Google is unavailable; unsynced items are shown below for retries. No guest Google account is required.</p>
+    </section>
+    <section class="integration-card" aria-labelledby="sync-title"><h2 id="sync-title">Synchronization health</h2><p class="integration-explainer">Calendar sync is intentionally transparent. No meeting link is shown before Google actually returns one.</p>
+      <div class="integration-health"><span class="integration-indicator {{ 'connected' if connection else 'disconnected' }}"></span><strong>{{ 'Connected' if connection else 'Offline mode' }}</strong></div>
+      <p>New bookings → Google Calendar event + Meet</p><p>Reschedules → Update existing event</p><p>Cancellations → Remove linked event</p><p>External conflicts → Hide affected slots</p>
+      <p class="fineprint">This is a single-host integration, not full bidirectional event editing. Google events changed directly are reflected as busy times, not imported as ZEQORO bookings.</p>
+    </section>
+  </div>
+  {% if queue %}<section class="integration-card integration-queue" aria-labelledby="sync-queue-title"><div class="section-heading"><div><span class="eyebrow">NEEDS ATTENTION</span><h2 id="sync-queue-title">Pending or failed synchronization</h2></div></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Booking</th><th>Time</th><th>Sync status</th><th>Retry</th></tr></thead><tbody>
+  {% for booking in queue if booking %}<tr><td>{{ booking.event_type.title }}<small>{{ booking.guest_name }}</small></td><td>{{ booking.start_utc | local_time }}</td><td><span class="status">{{ links[booking.id].status }}</span><small>{{ links[booking.id].last_error or '' }}</small></td><td><form method="post" action="/admin/google/retry/{{ booking.id }}"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="link-button" type="submit">Retry ↻</button></form></td></tr>{% endfor %}
+  </tbody></table></div></section>{% endif %}
+  <p class="integration-bottom"><a href="/how-it-works">Learn about ZEQORO →</a> · <a href="/admin">Return to dashboard →</a></p>
+</div>
+{% endblock %}

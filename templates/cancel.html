@@ -1,7 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Manage booking · {{ host }}{% endblock %}
+{% block title %}Manage meeting · ZEQORO{% endblock %}
+{% block body_class %}zeqoro-state{% endblock %}
+{% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 {% block content %}
-<section class="state-page"><div class="state-icon {% if booking.status == 'cancelled' %}danger-icon{% endif %}">{% if booking.status == 'cancelled' %}×{% else %}↻{% endif %}</div><span class="eyebrow">MANAGE YOUR MEETING</span><h1>{% if booking.status == 'cancelled' %}Booking cancelled.{% else %}Need to cancel?{% endif %}</h1><p class="lead">{{ booking.event_type.title }} · {{ booking.start_utc | local_time }} ({{ tz }})</p>
-{% if booking.status == 'confirmed' %}<form action="/cancel/{{ booking.cancel_token }}" method="post" onsubmit="return confirm('Cancel this meeting?');"><button type="submit" class="danger-btn">Confirm cancellation</button></form><p class="fineprint">You can book another available time from the homepage.</p>{% endif %}
-<a class="secondary-btn" href="/">Go to booking page</a></section>
+<section class="state-page"><div class="state-icon {% if booking.status == 'cancelled' %}danger-icon{% endif %}" aria-hidden="true">{% if booking.status == 'cancelled' %}×{% else %}◷{% endif %}</div><span class="eyebrow">MANAGE YOUR MEETING</span><h1>{% if booking.status == 'cancelled' %}Booking cancelled.{% else %}Plans changed?{% endif %}</h1><p class="lead">{{ booking.event_type.title }}<br><span class="state-description">{{ booking.start_utc | local_time }} · {{ tz }}</span></p>
+<div class="state-card state-decision"><h2>{% if booking.status == 'cancelled' %}You're all set{% else %}Choose what works best{% endif %}</h2><p>{% if booking.status == 'cancelled' %}This time is no longer reserved. You can book a new meeting from the public page.{% else %}If another time works better, you can reschedule without cancelling. Or cancel this meeting below.{% endif %}</p>{% if booking.status == 'confirmed' %}<div class="state-actions"><a class="primary-btn" href="/reschedule/{{ booking.cancel_token }}">Choose another time <span aria-hidden="true">→</span></a><form action="/cancel/{{ booking.cancel_token }}" method="post" onsubmit="return confirm('Are you sure you want to cancel this meeting?');"><button type="submit" class="danger-btn">Cancel this meeting</button></form></div>{% endif %}</div>
+<div class="state-actions"><a class="secondary-btn" href="/confirmed/{{ booking.cancel_token }}">Booking details</a><a class="secondary-btn" href="/">Explore meetings</a></div></section>
 {% endblock %}

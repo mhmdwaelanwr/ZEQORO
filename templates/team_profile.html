@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ organization.name if kind == 'organization' else member.name }} · ZEQORO{% endblock %}
+{% block content %}
+<div class="team-public-page">
+  <div class="team-breadcrumb"><a href="/">ZEQORO</a> <span>/</span> {{ 'Organization' if kind == 'organization' else 'Member' }} profile</div>
+  <div class="team-public-head">
+    <div class="team-avatar-lg" aria-hidden="true">{{ (organization.name if kind == 'organization' else member.name)[0]|upper }}</div>
+    <div class="team-public-intro"><span class="eyebrow">{{ 'ORGANIZATION WORKSPACE' if kind == 'organization' else 'PERSONAL SCHEDULING' }}</span>
+      <h1>{{ organization.name if kind == 'organization' else member.name }}</h1>
+      <p>{{ (organization.description or 'Find the right time to meet our team.') if kind == 'organization' else (member.bio or 'Book a conversation at a time that works for both of us.') }}</p>
+      <span class="team-zone">◷ All times shown in {{ tz }}</span>
+    </div>
+  </div>
+  <section class="team-public-events" aria-label="Bookable meetings"><div class="team-section-title"><h2>Choose a meeting</h2><p>No sign up required to book a time.</p></div>
+    <div class="team-event-grid">
+    {% for event in events %}
+      <article class="team-event-card"><span class="team-event-symbol" aria-hidden="true">✳</span><h3>{{ event.title }}</h3><p>{{ event.description or 'A focused conversation with us.' }}</p>
+        <div class="team-event-card-footer"><span>◷ {{ event.duration_min }} min</span>
+          {% if kind == 'organization' %}<a class="primary-btn" href="/o/{{ organization.slug }}/book/{{ event.slug[('o-' ~ organization.slug ~ '-')|length:] }}">Pick a time →</a>
+          {% else %}<a class="primary-btn" href="/u/{{ member.slug }}/book/{{ event.slug[('p-' ~ member.slug ~ '-')|length:] }}">Pick a time →</a>{% endif %}
+        </div>
+      </article>
+    {% else %}<div class="team-empty-state">No public meeting types are available yet.</div>{% endfor %}
+    </div>
+  </section>
+  {% if kind == 'organization' %}
+  <section class="team-public-people"><div class="team-section-title"><h2>Meet the team</h2><p>Book a team meeting above or visit an individual's booking page.</p></div>
+    <div class="team-people-grid">{% for person in members %}<a class="team-person-card" href="/u/{{ person.slug }}"><span class="team-member-avatar" aria-hidden="true">{{ person.name[0]|upper }}</span><span><strong>{{ person.name }}</strong><small>View personal booking page →</small></span></a>{% endfor %}</div>
+  </section>{% else %}
+  <p class="team-organization-foot">Part of <a href="/o/{{ organization.slug }}">{{ organization.name }} ↗</a></p>
+  {% endif %}
+</div>
+{% endblock %}

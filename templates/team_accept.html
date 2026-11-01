@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Join your team · ZEQORO{% endblock %}
+{% block content %}
+<div class="team-auth-wrap"><div class="team-auth-card"><div class="team-auth-icon">✳</div><span class="eyebrow">TEAM INVITATION</span><h1>Welcome, {{ display_name }}</h1><p>Set a private password to activate your personal scheduling workspace. Your invite works once and expires in 72 hours.</p>
+{% if error %}<p class="team-error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/team/invite/{{ invite_token }}"><label for="password" class="field-label">New password (12+ characters)</label><input id="password" class="text-input" name="password" type="password" minlength="12" autocomplete="new-password" required><label for="confirm-password" class="field-label">Confirm password</label><input id="confirm-password" class="text-input" name="confirm_password" type="password" minlength="12" autocomplete="new-password" required><button class="primary-btn wide" type="submit">Activate my account →</button></form></div></div>
+{% endblock %}

@@ -1,36 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Book a meeting with {{ host }}{% endblock %}
+{% block title %}ZEQORO — Make time for what matters{% endblock %}
 {% block content %}
-<section class="hero split-hero">
-  <div class="hero-content">
-    <span class="eyebrow"><span class="pulse-dot"></span> OPEN FOR CONVERSATIONS</span>
-    <h1>Good things<br>start with <span class="gradient-word">a conversation.</span></h1>
-    <p class="lead">Have an idea, partnership, or project in mind? Find the time that suits you. No back-and-forth emails required.</p>
-    <div class="hero-points"><span>◉ Instant confirmation</span><span>◉ Clearly labeled time zones</span></div>
-    <a class="primary-btn" href="#meetings">Explore meeting types <span>↘</span></a>
+<section class="home-hero" aria-labelledby="hero-title">
+  <div class="home-hero-copy">
+    <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> PERSONAL SCHEDULING, REIMAGINED</span>
+    <h1 id="hero-title">Make time for <span class="gradient-word">what matters.</span></h1>
+    <p class="lead">The best conversations shouldn't start with ten emails. Find a time that works, book it in seconds, and keep moving.</p>
+    <div class="hero-buttons"><a class="primary-btn" href="#meetings">Find a meeting <span aria-hidden="true">↗</span></a><a class="secondary-btn" href="/how-it-works">See how it works <span aria-hidden="true">→</span></a></div>
+    <div class="trust-row"><span><span class="trust-check" aria-hidden="true">✓</span> No account needed to book</span><span><span class="trust-check" aria-hidden="true">✓</span> Timezone-aware scheduling</span></div>
   </div>
-  <aside class="hero-card">
-    <div class="preview-top"><span class="preview-date">NOW BOOKING</span><span class="preview-dots">● ● ●</span></div>
-    <div class="avatar">{{ host[0]|upper }}</div>
-    <h2>{{ host }}</h2><p>Let's connect and make something happen.</p>
-    <div class="preview-line"></div>
-    <div class="preview-metadata"><span>◷</span> Flexible meeting times</div>
-    <div class="preview-metadata"><span>◎</span> Online & remote</div>
-    <div class="preview-metadata"><span>⊕</span> {{ tz }}</div>
-    <div class="preview-footer">YOUR NEXT GREAT MEETING STARTS HERE <span>↗</span></div>
+  <aside class="hero-showcase" aria-label="Your host information">
+    <div class="showcase-top"><span class="eyebrow">YOUR NEXT CONVERSATION</span><span class="showcase-glyph" aria-hidden="true">✳</span></div>
+    <div class="showcase-host"><span class="showcase-avatar" aria-hidden="true">{{ host[0]|upper }}</span><div><span class="subtle-label">MEET YOUR HOST</span><strong>{{ host }}</strong><small>{{ tz }}</small></div></div>
+    <div class="showcase-divider"></div>
+    <div class="showcase-schedule"><span>◷</span><div><strong>Choose your own time</strong><small>See only available time slots</small></div></div>
+    <div class="showcase-schedule"><span>▣</span><div><strong>Stay in control</strong><small>Reschedule or cancel privately</small></div></div>
+    <div class="showcase-bottom"><span>MEETINGS MADE EASY</span><span aria-hidden="true">↗</span></div>
   </aside>
 </section>
-<section id="meetings" class="meetings-section">
-  <div class="section-heading"><div><span class="eyebrow">CHOOSE YOUR CONVERSATION</span><h2>What would you like to discuss?</h2></div><p>Pick an option below, choose a date and time, and you're all set.</p></div>
+<section class="home-metrics" aria-label="Booking benefits"><div><span aria-hidden="true">◇</span><strong>Simple booking</strong><small>Three easy steps</small></div><div><span aria-hidden="true">◷</span><strong>Your time, respected</strong><small>Clear time zones</small></div><div><span aria-hidden="true">✳</span><strong>No unnecessary setup</strong><small>Guests book without signing in</small></div></section>
+<section class="meetings-section" id="meetings" aria-labelledby="meetings-title">
+  <div class="section-heading"><div><span class="eyebrow">AVAILABLE MEETING TYPES</span><h2 id="meetings-title">Let's make something happen.</h2></div><p>Pick the conversation that fits. Availability is checked before every booking.</p></div>
   <div class="event-grid">
     {% for event in events %}
-    <a class="event-card" href="/book/{{ event.slug }}">
-      <div class="event-card-top"><span class="event-icon">{% if event.duration_min <= 15 %}↗{% elif event.duration_min <= 30 %}✳{% else %}◇{% endif %}</span><span class="event-duration">{{ event.duration_min }} MIN</span></div>
-      <h3>{{ event.title }}</h3><p>{{ event.description or 'Schedule some time with me.' }}</p>
-      <div class="card-bottom"><span>◷ {{ event.duration_min }} minutes</span><span class="round-arrow">↗</span></div>
+    <a class="event-card" href="/book/{{ event.slug }}" aria-label="Book {{ event.title }}, {{ event.duration_min }} minutes">
+      <div class="event-card-top"><span class="event-icon" aria-hidden="true">{% if event.duration_min <= 15 %}↗{% elif event.duration_min <= 30 %}✳{% else %}◇{% endif %}</span><span class="event-duration">{{ event.duration_min }} MINUTES</span></div>
+      <h3>{{ event.title }}</h3><p>{{ event.description or 'Schedule time to connect and exchange ideas.' }}</p>
+      <div class="card-bottom"><span>View available times</span><span class="round-arrow" aria-hidden="true">↗</span></div>
     </a>
-    {% else %}<p>No meetings are available right now.</p>{% endfor %}
+    {% else %}
+    <div class="empty-meetings"><span class="empty-icon" aria-hidden="true">◷</span><h3>No meetings available right now</h3><p>New meeting links will appear here as soon as they're published.</p></div>
+    {% endfor %}
   </div>
 </section>
-<section class="bottom-cta"><div><span class="eyebrow">LET'S MAKE IT HAPPEN</span><h2>Your next opportunity is one meeting away.</h2></div><span class="line-art">✳</span></section>
+<section class="home-guide" aria-labelledby="guide-heading">
+  <div class="section-heading"><div><span class="eyebrow">HOW IT WORKS</span><h2 id="guide-heading">From hello to booked.</h2></div><a class="text-link" href="/how-it-works">Explore the complete guide →</a></div>
+  <div class="guide-grid"><article><span>01</span><h3>Choose a conversation</h3><p>Select the meeting type and duration that work for you.</p></article><article><span>02</span><h3>Find your moment</h3><p>Pick an available date and time with timezone clarity.</p></article><article><span>03</span><h3>Get your confirmation</h3><p>Receive a booking link and add the event to your calendar.</p></article></div>
+</section>
+<section class="bottom-cta"><div><span class="eyebrow">START A CONVERSATION</span><h2>Your next opportunity starts with a meeting.</h2><a class="primary-btn" href="#meetings">Browse meetings <span aria-hidden="true">↗</span></a></div><span class="line-art" aria-hidden="true">✳</span></section>
 {% endblock %}
