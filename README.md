@@ -122,5 +122,14 @@ Connect your own Google Calendar in **Host workspace → Integrations** (`/admin
 
 This remains **single-host beta**, not a multi-tenant or production-safe calendar platform. Local booking confirmations can precede a successful Google sync; errors are surfaced and retriable. Do not use ephemeral SQLite or hardcoded credentials in production.
 
-## v0.9 — Team Google Calendar & Meet
-Each member links a separate verified Google account in /team/google. Team bookings create a single Google event with all attendees, Google Meet and retryable sync; details in [TEAM-GOOGLE.md](TEAM-GOOGLE.md).
+## v0.9 — Per-member Google Calendar and team Meet
+
+Each active team member can connect a personal Google account from `/team/google` through a separate PKCE OAuth grant. The organizer creates **one** Google event and invites all team participants and the guest, using one Meet link; updates and cancellations propagate to the organizer's event and Google attendee notifications. The worker retries transient failures. See [TEAM-GOOGLE.md](TEAM-GOOGLE.md) for setup, privacy limits and rollout gates.
+
+
+## v1.0 Advanced Google Calendar
+
+- Per-member **multiple Free/Busy calendars** (up to 10 selected), with calendar discovery and compatibility fallback for older v0.9 grants.
+- **Collective organizer selection** for future meetings; Round Robin uses the assigned member.
+- **Google change notifications** over a public HTTPS webhook, incremental sync cursor, automatic channel renewal and external-edit review status. Requires the worker and explicit Google OAuth reconnection.
+- Setup, security notes and limitations in [ADVANCED-GOOGLE.md](ADVANCED-GOOGLE.md). No user data is accessed without consent.

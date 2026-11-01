@@ -159,7 +159,7 @@ async def lifespan(_app: FastAPI):
     team.seed()
     yield
 
-app = FastAPI(title="ZEQORO", version="0.9.0", lifespan=lifespan)
+app = FastAPI(title="ZEQORO", version="1.0.0", lifespan=lifespan)
 
 class SlidingWindowLimiter:
     """Single-process throttle. Replace with Redis before multi-worker deployment."""
@@ -988,7 +988,10 @@ def google_retry_one(booking_id: int, request: Request, token: str = Form(...)):
 import sys
 sys.modules.pop("team", None)
 sys.modules.pop("team_google", None)
+sys.modules.pop("team_calendar", None)
 import team
 import team_google
 team.install(app)
 team_google.install(app)
+import team_calendar
+team_calendar.install(app)

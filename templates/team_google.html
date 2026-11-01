@@ -1,37 +1,47 @@
 {% extends "base.html" %}
-{% block title %}Google Calendar · ZEQORO Team{% endblock %}
+{% block title %}My Google Calendar · ZEQORO{% endblock %}
 {% block content %}
-<main class="page-shell">
-  <div class="page-heading"><span class="eyebrow">TEAM WORKSPACE / INTEGRATIONS</span>
-    <h1>My Google Calendar</h1>
-    <p>Every teammate authorizes only their own Google Calendar. Team events share one Meet link.</p>
-  </div>
-  <section class="state-card" style="max-width:780px;margin:1.5rem auto 2.5rem">
-    <div class="state-card-top"><span class="eyebrow">MY CONNECTION</span>
-      <span class="status {{ 'is-confirmed' if linked else 'is-cancelled' }}">{{ 'Connected' if linked else 'Not connected' }}</span>
-    </div>
-    {% if request.query_params.get("result") == "connected" %}<p role="status">Google account connected successfully.</p>{% endif %}
-    {% if request.query_params.get("result") == "disconnected" %}<p role="status">Authorization removed. Existing Google events may remain in Google Calendar.</p>{% endif %}
-    {% if request.query_params.get("result") == "denied" %}<p role="status">Authorization was cancelled.</p>{% endif %}
-    {% if linked %}
-      <h2>{{ linked.verified_email }}</h2>
-      <p class="muted-tip">Your external busy times are checked during scheduling. Disconnecting does not delete existing events.</p>
-      <form method="post" action="/team/google/disconnect"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="secondary-btn" type="submit">Disconnect Google account</button></form>
-    {% elif configured %}
-      <h2>Google Calendar + Google Meet</h2>
-      <p>Authorize ZEQORO to see when you are busy and to send invitations for your scheduled meetings.</p>
-      <form method="post" action="/team/google/connect"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="primary-btn" type="submit">Connect my Google Calendar →</button></form>
-    {% else %}
-      <h2>Google Cloud setup is required</h2>
-      <p>Ask your workspace operator to configure Google OAuth, the token encryption key, and register /team/google/callback as an authorized redirect URI.</p>
-    {% endif %}
-    <p class="muted-tip">{{ 'Strict mode: each participant must authorize Google Calendar.' if strict else 'Compatibility mode: unconnected members can still book based on their ZEQORO hours; Google invitations remain pending until an organizer connects.' }}</p>
-    <a class="link-button" href="/team">← Back to team workspace</a>
-  </section>
-  {% if connected_members %}
-  <section class="state-card" style="max-width:780px;margin:auto"><h2>Connected team accounts</h2>
-    <ul>{% for name,email in connected_members %}<li>{{ name }} — {{ email }}</li>{% endfor %}</ul>
-  </section>
-  {% endif %}
+<main class="page-shell"><div class="page-heading"><span class="eyebrow">TEAM WORKSPACE / INTEGRATIONS</span><h1>My Google Calendar</h1><p>Connect your own calendar. ZEQORO never uses a teammate's Google account to authorize your meetings.</p></div>
+<section class="state-card" style="max-width:800px;margin:1.5rem auto 2.5rem"><div class="state-card-top"><span class="eyebrow">ACCOUNT CONNECTION</span><span class="status {{ 'is-confirmed' if linked else 'is-cancelled' }}">{{ 'Connected' if linked else 'Not connected' }}</span></div>
+{% if request.query_params.get('result') == 'connected' %}<p role="status">Your Google Calendar has been connected.</p>{% elif request.query_params.get('result') == 'disconnected' %}<p role="status">Your saved authorization has been removed. Existing Google events may remain in your calendar.</p>{% elif request.query_params.get('result') == 'denied' %}<p role="status">Google authorization was cancelled.</p>{% endif %}
+{% if linked %}
+<h2>{{ linked.verified_email }}</h2><p class="muted-tip">Connected on {{ linked.connected_utc.strftime('%d %b %Y') }}. External busy times are checked before showing available slots; invitations are created by the designated organizer.</p>
+<form method="post" action="/team/google/disconnect"><input type="hidden" name="token" value="{{ csrf_token }}"><button type="submit" class="secondary-btn">Disconnect my account</button></form>
+{% elif configured %}
+<h2>Google Calendar + Google Meet</h2><p>Authorize event creation and free/busy access to your calendar. You can disconnect at any time.</p>
+<form method="post" action="/team/google/connect"><input type="hidden" name="token" value="{{ csrf_token }}"><button type="submit" class="primary-btn">Connect my Google Calendar →</button></form>
+{% else %}
+<h2>Set up Google Cloud first</h2><p>The workspace administrator must configure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and a token encryption key, and register the /team/google/callback URL in the OAuth web client.</p>
+{% endif %}
+<p class="muted-tip" style="margin-top:1.5rem">{{ 'Strict mode: bookings require every selected member to connect.' if strict else 'Compatibility mode: members who have not connected use ZEQORO hours only. Sync starts after an eligible organizer connects.' }}</p>
+<a class="link-button" href="/team">← Back to team workspace</a>
+</section>
+{% if connected_members %}<section class="state-card" style="max-width:800px;margin:auto"><h2>Connected team accounts</h2><ul>{% for name,email in connected_members %}<li>{{ name }} — {{ email }}</li>{% endfor %}</ul></section>{% endif %}
+
+{% if linked %}
+<section class="state-card" style="max-width:800px;margin:1.2rem auto">
+  <h2>Calendars to check for conflicts</h2>
+  <p>Pick calendars whose busy events should block your availability. Existing connections need to reconnect once to authorize calendar discovery.</p>
+  <form method="post" action="/team/google/calendars/refresh"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="secondary-btn" type="submit">↻ Refresh my calendars</button></form>
+  {% if calendars %}<form method="post" action="/team/google/calendars/select" class="team-fields" style="margin-top:1rem"><input type="hidden" name="token" value="{{ csrf_token }}">
+    <fieldset class="team-member-picker"><legend>Free/Busy calendars (maximum 10)</legend>
+    {% for cal in calendars %}<label><input type="checkbox" name="calendar_ids" value="{{ cal.calendar_id }}" {% if cal.selected %}checked{% endif %} {% if not cal.readable %}disabled{% endif %}> {{ cal.display_name }} {% if not cal.readable %}(access lost){% endif %}</label>{% endfor %}
+    </fieldset><button class="primary-btn" type="submit">Save selected calendars</button>
+  </form>{% else %}<p class="muted-tip">No calendar list loaded yet. The existing primary calendar remains in use until you select calendars.</p>{% endif %}
+</section>
+<section class="state-card" style="max-width:800px;margin:1.2rem auto"><h2>Google change notifications</h2>
+ <p>Google push channels notify ZEQORO about changes; the worker then retrieves the actual changes. Channels renew automatically before expiry.</p>
+ {% if push_https %}<form method="post" action="/team/google/watches/refresh"><input type="hidden" name="token" value="{{ csrf_token }}"><button type="submit" class="secondary-btn">Enable / refresh push channels</button></form>
+ {% else %}<p class="muted-tip">Push requires a public HTTPS PUBLIC_BASE_URL. Localhost still uses live Free/Busy checks.</p>{% endif %}
+ {% for watch in watches %}<p><strong>{{ watch.calendar_id }}</strong> · {{ 'Update pending' if watch.dirty else 'Up to date' }} · expires {{ watch.expires_utc.strftime('%d %b %Y') }}{% if watch.last_sync_utc %} · last checked {{ watch.last_sync_utc.strftime('%d %b %H:%M') }} UTC{% endif %}</p>{% endfor %}
+</section>
+{% endif %}
+{% if collective %}<section class="state-card" style="max-width:800px;margin:1.2rem auto"><h2>Choose meeting organizer</h2><p>Applies to new Collective bookings only. Existing Google meetings keep their original organizer. Round Robin bookings are organized by the assigned member.</p>
+ {% for group in collective %}<form class="team-fields" method="post" action="/team/google/groups/{{ group.id }}/organizer" style="margin-bottom:1rem">
+ <input type="hidden" name="token" value="{{ csrf_token }}"><label class="field-label" for="organizer-{{ group.id }}">{{ group.event_type.title }}</label>
+ <select class="text-input" id="organizer-{{ group.id }}" name="member_id" required>{% for person in collective_members.get(group.id, []) %}
+ <option value="{{ person.id }}" {% if organizer_choices.get(group.id) == person.id %}selected{% endif %}>{{ person.name }}</option>{% endfor %}</select>
+ <button type="submit" class="secondary-btn">Save organizer</button></form>{% endfor %}
+ </section>{% endif %}
 </main>
 {% endblock %}

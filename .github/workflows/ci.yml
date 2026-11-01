@@ -42,4 +42,4 @@ jobs:
           node-version: "22"
       - run: node --check static/booking.js
       - run: node --check static/site.js
-      - run: python -m compileall -q app.py google_integration.py infra.py worker.py team.py team_google.py tests
+      - run: python -m compileall -q app.py google_integration.py infra.py worker.py team.py team_google.py team_calendar.py tests

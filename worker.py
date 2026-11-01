@@ -42,23 +42,24 @@ def due_booking_ids(now: datetime | None = None, limit: int = 20) -> list[int]:
 
 
 def due_team_booking_ids(now: datetime | None = None, limit: int = 20) -> list[int]:
-    """Team links with incomplete or changed Google sync, bounded by backoff."""
+    """Bounded retry queue for team Google events, including newly linked members."""
     import team_google
-    import team
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
-    delays = {"error": 600, "pending": 90, "pending_meet": 180, "waiting_account": 180}
+    retry_after = {"error": 600, "pending": 90, "pending_meet": 180, "waiting_account": 180}
     with SessionLocal() as db:
         rows = db.scalars(select(team_google.TeamGoogleEventLink).where(
-            team_google.TeamGoogleEventLink.status.in_(tuple(delays))
-        ).order_by(team_google.TeamGoogleEventLink.updated_utc.asc()).limit(250)).all()
+            team_google.TeamGoogleEventLink.status.in_(tuple(retry_after))
+        ).order_by(team_google.TeamGoogleEventLink.updated_utc).limit(250)).all()
         due = []
         for link in rows:
-            if link.updated_utc and link.updated_utc > now - timedelta(seconds=delays[link.status]):
+            if link.updated_utc and link.updated_utc > now - timedelta(seconds=retry_after[link.status]):
                 continue
             booking = db.get(Booking, link.booking_id)
             if not booking or (booking.status == "confirmed" and booking.end_utc <= now):
                 continue
             if link.status == "waiting_account":
+                # Don't repeatedly invoke Google when no team host has connected.
+                import team
                 member_ids = list(db.scalars(select(team.BookingAssignee.member_id).where(
                     team.BookingAssignee.booking_id == link.booking_id)).all())
                 if link.organizer_member_id is not None:
@@ -97,7 +98,7 @@ def run_once(lease: RedisLease | None = None) -> dict[str, int]:
                     lease.release(booking_id, lock)
                 except Exception:
                     LOG.exception("Could not release sync lease for booking id=%s", booking_id)
-    # Team events use a separate Redis lease namespace.
+    # Separate leases prevent legacy and team sync jobs for the same booking id colliding.
     import team_google
     for booking_id in due_team_booking_ids():
         key = f"team-{booking_id}"
@@ -113,7 +114,7 @@ def run_once(lease: RedisLease | None = None) -> dict[str, int]:
             if status == "error":
                 counts["errors"] += 1
         except Exception:
-            LOG.exception("Team Google synchronization failed for booking id=%s", booking_id)
+            LOG.exception("Team Google sync retry failed for booking id=%s", booking_id)
             counts["errors"] += 1
         finally:
             if lock and lease:
@@ -121,6 +122,10 @@ def run_once(lease: RedisLease | None = None) -> dict[str, int]:
                     lease.release(key, lock)
                 except Exception:
                     LOG.exception("Could not release team sync lease for booking id=%s", booking_id)
+    import team_calendar
+    push = team_calendar.run_due_watches(lease=lease)
+    if any(push.values()):
+        counts.update(push)
     return counts
 
 
@@ -137,7 +142,7 @@ def main() -> None:
     while True:
         try:
             stats = run_once(lease)
-            LOG.info("Google sync retry: processed=%d skipped=%d errors=%d", **stats)
+            LOG.info("Calendar worker stats: %s", stats)
         except Exception:
             LOG.exception("Google sync retry poll failed")
         time.sleep(period)
