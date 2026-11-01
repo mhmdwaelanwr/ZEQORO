@@ -173,6 +173,41 @@ def freebusy(token: str, calendar_id: str, start: datetime, end: datetime) -> li
     return intervals
 
 
+
+def freebusy_many(token: str, calendar_ids: list[str], start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+    """Check all selected Google calendars in one API call; fail closed on any error.
+
+    Google FreeBusy supports up to 50 calendars per request. Keeping all members'
+    selected calendars in the same response reduces scheduling API latency.
+    """
+    ids = list(dict.fromkeys(calendar_ids))
+    if not ids or len(ids) > 50 or any(not isinstance(i, str) or not i for i in ids):
+        raise GoogleIntegrationError("Invalid Google calendar selection")
+    result = _request(token, "POST", "/freeBusy", payload={
+        "timeMin": start.astimezone(timezone.utc).isoformat(),
+        "timeMax": end.astimezone(timezone.utc).isoformat(),
+        "items": [{"id": identifier} for identifier in ids],
+    })
+    calendars = result.get("calendars")
+    if not isinstance(calendars, dict) or result.get("groups", {}).get("errors"):
+        raise GoogleIntegrationError("Google calendar availability could not be verified")
+    intervals = []
+    for identifier in ids:
+        calendar = calendars.get(identifier)
+        if not isinstance(calendar, dict) or calendar.get("errors") or not isinstance(calendar.get("busy"), list):
+            raise GoogleIntegrationError("Google calendar availability could not be verified")
+        try:
+            for item in calendar["busy"]:
+                a = datetime.fromisoformat(item["start"].replace("Z", "+00:00"))
+                b = datetime.fromisoformat(item["end"].replace("Z", "+00:00"))
+                if a.tzinfo is None or b.tzinfo is None or b <= a:
+                    raise ValueError("Invalid busy interval")
+                intervals.append((a.astimezone(timezone.utc).replace(tzinfo=None),
+                                  b.astimezone(timezone.utc).replace(tzinfo=None)))
+        except (KeyError, TypeError, AttributeError, ValueError) as exc:
+            raise GoogleIntegrationError("Google returned an invalid busy interval") from exc
+    return intervals
+
 def event_path(calendar_id: str, event_id: str = "") -> str:
     base = "/calendars/" + quote(calendar_id, safe="") + "/events"
     return base + ("/" + quote(event_id, safe="") if event_id else "")

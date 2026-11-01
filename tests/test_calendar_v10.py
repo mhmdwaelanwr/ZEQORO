@@ -50,16 +50,16 @@ def test_calendar_discovery_multi_select_and_live_freebusy(setup, monkeypatch):
     assert client.post("/team/google/calendars/select", data={"token": csrf, "calendar_ids": []}).status_code == 400
     monkeypatch.setattr(app.google, "access_token", lambda *args: "test-access")
     seen = []
-    def busy(token, calendar_id, start, end):
-        seen.append(calendar_id)
-        return [(datetime.now(timezone.utc).replace(tzinfo=None), datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1))] if calendar_id.endswith("@group.calendar.google.com") else []
-    monkeypatch.setattr(app.google, "freebusy", busy)
+    def busy(token, calendar_ids, start, end):
+        seen.append(calendar_ids)
+        return [(datetime.now(timezone.utc).replace(tzinfo=None), datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1))]
+    monkeypatch.setattr(app.google, "freebusy_many", busy)
     with app.SessionLocal() as db:
         today = datetime.now(app.HOST_TZ).date()
         result = app.team_calendar.multi_busy(db, mid, today)
         assert result
-        assert seen == selected
-    monkeypatch.setattr(app.google, "freebusy", lambda *args: (_ for _ in ()).throw(app.google.GoogleIntegrationError("offline")))
+        assert seen == [selected]
+    monkeypatch.setattr(app.google, "freebusy_many", lambda *args: (_ for _ in ()).throw(app.google.GoogleIntegrationError("offline")))
     with app.SessionLocal() as db:
         with pytest.raises(Exception) as err:
             app.team_calendar.multi_busy(db, mid, datetime.now(app.HOST_TZ).date())

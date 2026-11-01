@@ -159,10 +159,9 @@ def multi_busy(db: Session, member_id: int, day: date) -> list[tuple[datetime, d
     start = datetime.combine(day, clock_time.min, tzinfo=core.HOST_TZ)
     end = datetime.combine(day + timedelta(days=1), clock_time.min, tzinfo=core.HOST_TZ)
     try:
-        intervals = []
-        for calendar_id in ids:
-            intervals.extend(google.freebusy(token, calendar_id, start, end))
-        return intervals
+        if len(ids) == 1:
+            return google.freebusy(token, ids[0], start, end)
+        return google.freebusy_many(token, ids, start, end)
     except google.GoogleIntegrationError as exc:
         raise HTTPException(503, "Availability could not be verified for all selected Google calendars") from exc
 
