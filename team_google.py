@@ -26,6 +26,7 @@ import team
 
 UTC_NOW = lambda: datetime.now(timezone.utc).replace(tzinfo=None)
 TEAM_OAUTH_SCOPES = (*google.SCOPES, "https://www.googleapis.com/auth/calendar.calendarlist.readonly", "openid", "email")
+SCOPES = TEAM_OAUTH_SCOPES  # Backward-compatible alias for v0.9 test and integration clients.
 
 
 class MemberGoogleConnection(core.Base):

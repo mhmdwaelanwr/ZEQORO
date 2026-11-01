@@ -9,7 +9,11 @@ import pytest
 from sqlalchemy import select
 
 from test_booking import setup
-from test_team_google import added_member, configure, link, owner_login
+try:  # v0.9 has two compatible helper naming conventions across branches.
+    from test_team_google import added_member, configure, link, owner_login
+except ImportError:
+    from test_team_google import second_member as added_member, configured as configure
+    from test_team_google import linked as link, owner as owner_login
 from test_team import next_slot, book
 
 
