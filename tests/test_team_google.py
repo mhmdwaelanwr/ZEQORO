@@ -128,3 +128,49 @@ def test_missing_calendar_keeps_booking_pending_not_fake_meet(setup):
         link=db.scalar(select(app.team_google.TeamGoogleEventLink))
         assert link.status=="waiting_account" and link.organizer_member_id is None
     assert b"connect Google Calendar" in client.get(resp.headers["location"]).content
+
+
+def test_organizer_cannot_silently_switch_google_accounts(setup, monkeypatch):
+    client,app=setup
+    configured(monkeypatch)
+    with app.SessionLocal() as db:
+        oid=db.scalar(select(app.team.Member.id).where(app.team.Member.role=="owner"))
+    linked(app,oid,"owner@gmail.com","original-google-subject")
+    monkeypatch.setattr(app.google,"access_token",lambda *args:"token")
+    monkeypatch.setattr(app.google,"freebusy",lambda *args:[])
+    monkeypatch.setattr(app.google,"insert_event",lambda *args:{"hangoutLink":"https://meet.google.com/test-room"})
+    start,_=next_slot(client,"/api/team/slots/u/anwar/intro")
+    assert book(client,"/u/anwar/book/intro",start).status_code==303
+    with app.SessionLocal() as db:
+        conn=db.get(app.team_google.MemberGoogleConnection,oid)
+        conn.google_subject="another-google-account"
+        conn.verified_email="new@gmail.com"
+        bid=db.scalar(select(app.team_google.TeamGoogleEventLink.booking_id))
+        db.commit()
+    monkeypatch.setattr(app.google,"insert_event",lambda *args:(_ for _ in ()).throw(AssertionError("must not create duplicate")))
+    assert app.team_google.sync_team_booking(bid)=="account_mismatch"
+
+
+def test_worker_retries_waiting_team_bookings_after_connection(setup,monkeypatch):
+    import importlib,sys
+    client,app=setup
+    configured(monkeypatch)
+    start,_=next_slot(client,"/api/team/slots/u/anwar/intro")
+    assert book(client,"/u/anwar/book/intro",start).status_code==303
+    with app.SessionLocal() as db:
+        row=db.scalar(select(app.team_google.TeamGoogleEventLink))
+        row.updated_utc-=timedelta(minutes=20)
+        bid=row.booking_id
+        oid=db.scalar(select(app.team.Member.id).where(app.team.Member.role=="owner"))
+        db.commit()
+    sys.modules.pop("worker",None)
+    worker=importlib.import_module("worker")
+    assert worker.due_team_booking_ids()==[]
+    linked(app,oid,"owner@gmail.com","owner-google-subject")
+    assert worker.due_team_booking_ids()==[bid]
+    calls=[]
+    monkeypatch.setattr(worker,"due_booking_ids",lambda:[])
+    monkeypatch.setattr(app.team_google,"sync_team_booking",lambda x:calls.append(x) or "synced")
+    assert worker.run_once()=={"processed":1,"skipped":0,"errors":0}
+    assert calls==[bid]
+    sys.modules.pop("worker",None)
