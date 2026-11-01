@@ -19,3 +19,6 @@
 6. Schedule Postgres backups using `pg_dump` and **test restoring them**, and back up `.env` and the Fernet encryption key securely. Avoid exposing credentials in shell history/logs. Pin/scan container images and plan automatic security updates.
 
 **Production limitations:** `Base.metadata.create_all()` is bootstrap-only and not a migration system. There is no monitored deployment, automated backups/restores, OAuth verification, shared Google access-token cache, multi-calendar read, or zero-downtime deployments. **Do not migrate existing real bookings or expose this system as a production SaaS until these gates are met.**
+
+## v0.9 Team Google tables
+The startup ORM creates two additional tables, team_google_connections and team_google_event_links. This is additive schema setup, **not an Alembic migration**. Back up data and the encryption key; register the extra team OAuth callback. See TEAM-GOOGLE.md.

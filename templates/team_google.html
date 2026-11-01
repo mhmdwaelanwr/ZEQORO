@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Google Calendar · ZEQORO Team{% endblock %}
+{% block content %}
+<main class="page-shell">
+  <div class="page-heading"><span class="eyebrow">TEAM WORKSPACE / INTEGRATIONS</span>
+    <h1>My Google Calendar</h1>
+    <p>Every teammate authorizes only their own Google Calendar. Team events share one Meet link.</p>
+  </div>
+  <section class="state-card" style="max-width:780px;margin:1.5rem auto 2.5rem">
+    <div class="state-card-top"><span class="eyebrow">MY CONNECTION</span>
+      <span class="status {{ 'is-confirmed' if linked else 'is-cancelled' }}">{{ 'Connected' if linked else 'Not connected' }}</span>
+    </div>
+    {% if request.query_params.get("result") == "connected" %}<p role="status">Google account connected successfully.</p>{% endif %}
+    {% if request.query_params.get("result") == "disconnected" %}<p role="status">Authorization removed. Existing Google events may remain in Google Calendar.</p>{% endif %}
+    {% if request.query_params.get("result") == "denied" %}<p role="status">Authorization was cancelled.</p>{% endif %}
+    {% if linked %}
+      <h2>{{ linked.verified_email }}</h2>
+      <p class="muted-tip">Your external busy times are checked during scheduling. Disconnecting does not delete existing events.</p>
+      <form method="post" action="/team/google/disconnect"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="secondary-btn" type="submit">Disconnect Google account</button></form>
+    {% elif configured %}
+      <h2>Google Calendar + Google Meet</h2>
+      <p>Authorize ZEQORO to see when you are busy and to send invitations for your scheduled meetings.</p>
+      <form method="post" action="/team/google/connect"><input type="hidden" name="token" value="{{ csrf_token }}"><button class="primary-btn" type="submit">Connect my Google Calendar →</button></form>
+    {% else %}
+      <h2>Google Cloud setup is required</h2>
+      <p>Ask your workspace operator to configure Google OAuth, the token encryption key, and register /team/google/callback as an authorized redirect URI.</p>
+    {% endif %}
+    <p class="muted-tip">{{ 'Strict mode: each participant must authorize Google Calendar.' if strict else 'Compatibility mode: unconnected members can still book based on their ZEQORO hours; Google invitations remain pending until an organizer connects.' }}</p>
+    <a class="link-button" href="/team">← Back to team workspace</a>
+  </section>
+  {% if connected_members %}
+  <section class="state-card" style="max-width:780px;margin:auto"><h2>Connected team accounts</h2>
+    <ul>{% for name,email in connected_members %}<li>{{ name }} — {{ email }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

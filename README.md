@@ -121,3 +121,6 @@ Connect your own Google Calendar in **Host workspace → Integrations** (`/admin
 **Configuration is required before the integration can connect or create events:** Google Cloud OAuth credentials, Calendar API enablement, the exact registered callback and `GOOGLE_TOKEN_ENCRYPTION_KEY` in your local `.env`. No Google account or credentials are bundled. See [GOOGLE-INTEGRATION.md](GOOGLE-INTEGRATION.md) for setup, security, operational limits and sources.
 
 This remains **single-host beta**, not a multi-tenant or production-safe calendar platform. Local booking confirmations can precede a successful Google sync; errors are surfaced and retriable. Do not use ephemeral SQLite or hardcoded credentials in production.
+
+## v0.9 — Team Google Calendar & Meet
+Each member links a separate verified Google account in /team/google. Team bookings create a single Google event with all attendees, Google Meet and retryable sync; details in [TEAM-GOOGLE.md](TEAM-GOOGLE.md).

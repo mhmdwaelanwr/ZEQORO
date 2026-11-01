@@ -56,3 +56,11 @@ Private, self-hostable scheduling with elegant guest booking, then workflows for
 - Easy!Appointments: GPL-3.0; redistribution is subject to GPL terms.
 
 Current code has been authored independently with no copied upstream source; evaluate third-party dependencies/licenses before a commercial release. See README for source links.
+
+## v0.9 — per-member calendar and team event sync
+- [x] Per-member OAuth/PKCE, encrypted tokens, verified account identity
+- [x] Team Google Free/Busy checks and strict-mode flag
+- [x] One organizer, one Meet conference, guest and team attendee invitations
+- [x] Reschedule, cancel, eventual sync and Redis worker retries
+- [ ] Real multi-account Google Cloud E2E and production OAuth verification
+- [ ] Alembic migrations, multi-tenant security review, push notification sync

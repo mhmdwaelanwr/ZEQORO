@@ -64,3 +64,5 @@ A new, independent FastAPI implementation based on Google's public REST APIs. **
 | [OpenCalendar](https://github.com/kudretyilmazz/opencalendar) | Independent scheduling, availability workflows | AGPL-3.0: use as feature inspiration only unless complying with license. |
 
 No application code, logos or illustrations from those repositories are copied into ZEQORO.
+
+**v0.9:** This page documents the original owner account. Individual organization member OAuth is supported separately at /team/google. See [TEAM-GOOGLE.md](TEAM-GOOGLE.md).
