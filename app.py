@@ -159,7 +159,7 @@ async def lifespan(_app: FastAPI):
     team.seed()
     yield
 
-app = FastAPI(title="ZEQORO", version="0.8.0", lifespan=lifespan)
+app = FastAPI(title="ZEQORO", version="0.9.0", lifespan=lifespan)
 
 class SlidingWindowLimiter:
     """Single-process throttle. Replace with Redis before multi-worker deployment."""
@@ -537,7 +537,15 @@ def confirmed(token: str, request: Request):
         import team
         team_booking = db.get(team.TeamBooking, booking.id)
         assignees = [a.member.name for a in db.scalars(select(team.BookingAssignee).where(team.BookingAssignee.booking_id == booking.id)).all()] if team_booking else []
-        return page(request, "confirmed.html", booking=booking, assigned_team=assignees, google_link=None if team_booking else booking_google_link(db, booking.id), google_connected=bool(google_connection(db)) if not team_booking else False)
+        if team_booking:
+            import team_google
+            linked = db.get(team_google.TeamGoogleEventLink, booking.id)
+            connected = bool(linked and linked.organizer_member_id)
+        else:
+            linked = booking_google_link(db, booking.id)
+            connected = bool(google_connection(db))
+        return page(request, "confirmed.html", booking=booking, assigned_team=assignees,
+                    google_link=linked, google_connected=connected)
 
 @app.get("/cancel/{token}", response_class=HTMLResponse)
 def cancel_page(token: str, request: Request):
@@ -560,7 +568,11 @@ def cancel_booking(token: str, request: Request):
             return public_error(request, "You cannot cancel a meeting after its start time.")
         booking.status = "cancelled"
         db.commit()
-        sync_google_booking(booking.id)
+        if db.get(__import__("team").TeamBooking, booking.id):
+            import team_google
+            team_google.sync_team_booking(booking.id)
+        else:
+            sync_google_booking(booking.id)
         return RedirectResponse(f"/cancel/{token}", status_code=303)
 
 @app.get("/reschedule/{token}", response_class=HTMLResponse)
@@ -620,7 +632,10 @@ def reschedule_booking(token: str, request: Request, tasks: BackgroundTasks, sta
         booking.start_utc = utc_naive(selected)
         booking.end_utc = utc_naive(selected + timedelta(minutes=event.duration_min))
         db.commit()
-        if not team_booking:
+        if team_booking:
+            import team_google
+            team_google.sync_team_booking(booking.id)
+        else:
             sync_google_booking(booking.id)
             tasks.add_task(booking_email, booking.guest_email, booking.guest_name, "Updated: " + event.title, booking.start_utc, booking.cancel_token)
         return RedirectResponse(f"/confirmed/{token}", status_code=303)
@@ -972,5 +987,8 @@ def google_retry_one(booking_id: int, request: Request, token: str = Form(...)):
 # Register team tables and routes before ASGI startup creates all metadata.
 import sys
 sys.modules.pop("team", None)
+sys.modules.pop("team_google", None)
 import team
+import team_google
 team.install(app)
+team_google.install(app)

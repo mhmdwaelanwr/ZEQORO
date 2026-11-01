@@ -282,8 +282,13 @@ def team_slots(db: Session, event: core.EventType, members: list[Member], day: d
         if member.role == "owner":
             blocked = blocked or db.scalar(select(core.BlockedDate.id).where(core.BlockedDate.day == day.isoformat())) is not None
         current = _bookings_for_member(db, member, low, high, ignore_booking_id=ignore_booking_id)
-        # Only the existing owner can use the legacy single-host Google calendar connection.
-        google_busy = core.calendar_busy(db, day) if member.role == "owner" else []
+        # Strict round robin skips unconnected members; collective requires all.
+        import team_google
+        if mode == "round_robin" and team_google.require_connected() and not team_google.connection(db, member.id):
+            blocked = True
+            google_busy = []
+        else:
+            google_busy = team_google.member_busy(db, member, day)
         calendars[member.id] = (hours, blocked, current, google_busy)
     result = []
     for minute in range(0, 24 * 60 - event.duration_min + 1, 15):
@@ -462,6 +467,8 @@ def install(web: FastAPI) -> None:
                     kind="personal" if scope == "u" else group.mode))
             db.add_all([BookingAssignee(booking_id=booking.id, member_id=m.id) for m in chosen])
             db.commit()
+            import team_google
+            team_google.sync_team_booking(booking.id)
             return RedirectResponse(f"/confirmed/{booking.cancel_token}", 303)
 
     @web.post("/u/{member_slug}/book/{event_slug}")
@@ -499,11 +506,20 @@ def install(web: FastAPI) -> None:
                     day_bookings[day_label].append(b)
             blocks = db.scalars(select(MemberDayOff).where(MemberDayOff.member_id == member.id).order_by(MemberDayOff.day)).all()
             hours = {h.weekday: h for h in db.scalars(select(MemberHours).where(MemberHours.member_id == member.id)).all()}
+            import team_google
+            google_link = team_google.connection(db, member.id)
+            google_status = {link.booking_id: link.status for link in db.scalars(select(
+                team_google.TeamGoogleEventLink).where(team_google.TeamGoogleEventLink.booking_id.in_(
+                [b.id for b in bookings] or [-1]))).all()}
+            linked_count = db.scalar(select(func.count(team_google.MemberGoogleConnection.member_id)).join(Member,
+                Member.id == team_google.MemberGoogleConnection.member_id).where(
+                Member.organization_id == org.id, Member.active.is_(True))) or 0
             return core.page(request, "team_dashboard.html", identity=member, organization=org, members=members,
                    group_events=group_events, personal_events=personal_events, bookings=bookings,
                    assignments=assigned, csrf_token=request.session.get("csrf") if request.session.get("admin") else request.session.get("team_csrf"),
                    days=core.DAYS, hours=hours, days_off=blocks, today=today.isoformat(), next_week=next_week,
-                   day_bookings=day_bookings, is_admin=member.role in ("owner", "admin"))
+                   day_bookings=day_bookings, is_admin=member.role in ("owner", "admin"),
+                   google_link=google_link, google_status=google_status, google_linked_members=linked_count)
 
     @web.post("/team/members/invite")
     def invite(request: Request, token: str = Form(...), name: str = Form(...), slug: str = Form(...), email: str = Form(...), role: str = Form("member")):
@@ -706,6 +722,8 @@ def install(web: FastAPI) -> None:
             db.add(TeamBooking(booking_id=booking.id, organization_id=actor.organization_id, kind="internal"))
             db.add_all([BookingAssignee(booking_id=booking.id, member_id=m.id) for m in members])
             db.commit()
+            import team_google
+            team_google.sync_team_booking(booking.id)
         return RedirectResponse("/team#team-bookings", 303)
 
     @web.post("/team/profile")

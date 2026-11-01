@@ -75,13 +75,28 @@ def pkce_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
 
 
-def authorization_url(settings: Settings, state: str, verifier: str) -> str:
+def authorization_url(settings: Settings, state: str, verifier: str, *, scopes: tuple[str, ...] = SCOPES) -> str:
     return AUTH_URL + "?" + urlencode({
         "client_id": settings.client_id, "redirect_uri": settings.redirect_uri,
-        "response_type": "code", "scope": " ".join(SCOPES), "state": state,
+        "response_type": "code", "scope": " ".join(scopes), "state": state,
         "access_type": "offline", "prompt": "consent", "code_challenge": pkce_challenge(verifier),
         "code_challenge_method": "S256", "include_granted_scopes": "true",
     })
+
+
+def account_identity(token: str) -> dict[str, str]:
+    """Verify the Google account owner with OpenID Connect email scope."""
+    try:
+        with httpx.Client(timeout=8) as client:
+            response = client.get("https://openidconnect.googleapis.com/v1/userinfo",
+                headers={"Authorization": "Bearer " + token})
+        response.raise_for_status()
+        identity = response.json()
+        if identity.get("email_verified") is not True or not identity.get("sub") or not identity.get("email"):
+            raise GoogleIntegrationError("Google did not provide a verified account identity")
+        return {"sub": str(identity["sub"]), "email": str(identity["email"])}
+    except (httpx.HTTPError, ValueError) as exc:
+        raise GoogleIntegrationError("Could not verify the connected Google account") from exc
 
 
 def _post_token(data: dict) -> dict:
